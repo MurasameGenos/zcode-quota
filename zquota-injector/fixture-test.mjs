@@ -126,18 +126,26 @@ const check = (n, ok, extra = "") => { console.log(`${ok ? "✓" : "✗"} ${n}${
     check("小环 SVG 就位", ringSvgOk);
     check("环颜色内联固定（不受状态类影响）", await ev(`(()=>{const c=document.querySelector('[data-zquota-ring="kimi"] svg circle[style*="stroke-dasharray"]');return c && c.style.stroke.includes('var(') && !c.getAttribute('stroke');})()`));
     check("Kimi 环 title 含实时数据", await ev(`(document.querySelector('[data-zquota-ring="kimi"]')?.title || '').includes('12.0%')`));
-    check("DeepSeek 环以 ¥100 为满显示进度", await ev(`(()=>{const d=document.querySelector('[data-zquota-ring="ds"]');if(!d)return false;const c=d.querySelector('circle[style*="stroke-dasharray"]');if(!c)return false;const off=parseFloat(c.style.strokeDashoffset);const C=2*Math.PI*10;const ratio=1-off/C;return Math.abs(ratio-13.23/100)<0.005 && (d.title||'').includes('¥13.23');})()`));
+    check("DeepSeek 环以 ¥100 为满显示进度且用主题色 #4D6BFE", await ev(`(()=>{const d=document.querySelector('[data-zquota-ring="ds"]');if(!d)return false;const c=d.querySelector('circle[style*="stroke-dasharray"]');if(!c)return false;const off=parseFloat(c.style.strokeDashoffset);const C=2*Math.PI*10;const ratio=1-off/C;const col=getComputedStyle(c).stroke;return Math.abs(ratio-13.23/100)<0.005 && (d.title||'').includes('¥13.23') && (col==='rgb(77, 107, 254)'||col==='#4d6bfe');})()`));
 
-    // 悬停展开面板
+    // 悬停 Kimi 环 → 面板只含 Kimi 区块
     await ev(`document.querySelector('[data-zquota-ring="kimi"]').dispatchEvent(new MouseEvent('mouseenter', {bubbles:false}))`);
     await sleep(400);
-    check("悬停后面板显示", await ev(`document.querySelector('[data-zquota-panel]')?.style.display === 'block'`));
+    check("悬停 Kimi 环后面板显示", await ev(`document.querySelector('[data-zquota-panel]')?.style.display === 'block'`));
+    const kimiPanelText = await ev(`document.querySelector('[data-zquota-panel]')?.innerText || ''`);
+    check("Kimi 环面板只显示 Kimi 区块", kimiPanelText.toLowerCase().includes("kimi") && kimiPanelText.toLowerCase().includes("月度总量") && !kimiPanelText.toLowerCase().includes("deepseek"), kimiPanelText.split("\n").slice(0, 2).join(" / "));
+    check("Kimi 面板无 剩 xx/xx 副文本", !kimiPanelText.includes("剩 88/100"));
+    check("Kimi 面板含重置时间", kimiPanelText.includes("29天后"));
+    check("面板无底部说明行", !kimiPanelText.includes("更新于") && !kimiPanelText.includes("ZCodeQuota"));
+    await ev(`document.dispatchEvent(new KeyboardEvent('keydown', {key:'Escape', bubbles:true}))`);
+    await sleep(200);
+
+    // 悬停 DS 环 → 面板只含 DeepSeek 区块
+    await ev(`document.querySelector('[data-zquota-ring="ds"]').dispatchEvent(new MouseEvent('mouseenter', {bubbles:false}))`);
+    await sleep(400);
+    const dsPanelText = await ev(`document.querySelector('[data-zquota-panel]')?.innerText || ''`);
+    check("DS 环面板只显示 DeepSeek 区块", dsPanelText.toLowerCase().includes("deepseek") && dsPanelText.includes("¥13.23") && !dsPanelText.toLowerCase().includes("kimi"), dsPanelText.split("\n").slice(0, 2).join(" / "));
     check("面板无毛玻璃（实底+无模糊）", await ev(`(()=>{const p=document.querySelector('[data-zquota-panel]');const s=getComputedStyle(p);const opaque=s.backgroundColor;return s.backdropFilter==='none'&&s.webkitBackdropFilter!=='blur(8px)'&&!!opaque;})()`));
-    const panelText = await ev(`document.querySelector('[data-zquota-panel]')?.innerText || ''`);
-    check("面板含 Kimi 区块（无 剩 xx/xx 副文本）", panelText.includes("月度总量") && panelText.includes("12.0%") && !panelText.includes("剩 88/100"), panelText.split("\n").slice(0, 3).join(" / "));
-    check("面板含 DeepSeek 余额", panelText.includes("¥13.23") && panelText.includes("可正常调用"));
-    check("面板含重置时间", panelText.includes("29天后"));
-    check("面板无底部说明行", !panelText.includes("更新于") && !panelText.includes("ZCodeQuota"));
 
     // 面板关闭：粘滞打开 → 点击面板外 → 收起；Esc 同理
     await ev(`document.querySelector('[data-zquota-ring="kimi"]').click()`);

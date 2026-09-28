@@ -19,7 +19,7 @@
   }
 
   const TID = "chat-context-usage-trigger";
-  const state = { data: null, error: "", fetching: false, lastFetch: 0, kimiBtn: null, dsBtn: null, panel: null, hoverTimer: null, settingsCard: null, testidsDumped: false };
+  const state = { data: null, error: "", fetching: false, lastFetch: 0, kimiBtn: null, dsBtn: null, panel: null, panelScope: "all", hoverTimer: null, settingsCard: null, testidsDumped: false };
 
   const log = (m) => {
     console.debug("[zquota]", m);
@@ -135,12 +135,13 @@
     }
     if (state.dsBtn?.isConnected) {
       const r = dsRatio(state.data);
+      // DeepSeek 品牌主题色；查不到数据时灰、余额不足时琥珀
       const color =
         r == null
           ? token("--color-foreground-subtle", "#9aa3b5")
           : state.data?.deepseek?.available === false
             ? token("--color-warning", "#ffb86c")
-            : token("--color-usage-chart-2", "#2dd4bf");
+            : "#4D6BFE";
       state.dsBtn.innerHTML = ringSvg(r, color);
       state.dsBtn.title = dsRingTitle();
       state.dsBtn.setAttribute("aria-label", dsRingTitle());
@@ -235,9 +236,13 @@
     return t;
   }
 
-  function panelBody(container) {
+  // scope: "kimi" 只显示 Kimi 区块，"ds" 只显示 DeepSeek 区块，"all" 全部（设置页用）
+  const SCOPE_TITLES = { kimi: "Kimi Code 订阅", ds: "DeepSeek 余额", all: "外部模型额度" };
+
+  function panelBody(container, scope = "all") {
     const d = state.data;
     container.textContent = "";
+    if (container === state._panelBody && state._panelTitle) state._panelTitle.textContent = SCOPE_TITLES[scope] || SCOPE_TITLES.all;
     if (!d) {
       const line = el("div", "text-ui-sm", state.error || "加载中…");
       if (state.error) line.style.color = token("--color-destructive", "#ff7b93");
@@ -250,31 +255,36 @@
       container.appendChild(warn);
     }
     // Kimi
-    container.appendChild(sectionTitle("Kimi Code 订阅"));
-    if (d.kimi?.ok) d.kimi.rows.forEach((r) => container.appendChild(meterRow(r)));
-    else container.appendChild(el("div", "text-ui-sm", d.kimi?.error || "查询失败")).style.color = token("--color-destructive", "#ff7b93");
+    if (scope !== "ds") {
+      container.appendChild(sectionTitle("Kimi Code 订阅"));
+      if (d.kimi?.ok) d.kimi.rows.forEach((r) => container.appendChild(meterRow(r)));
+      else container.appendChild(el("div", "text-ui-sm", d.kimi?.error || "查询失败")).style.color = token("--color-destructive", "#ff7b93");
+    }
     // DeepSeek
-    const dsTitle = sectionTitle("DeepSeek 余额");
-    dsTitle.style.marginTop = "12px";
-    container.appendChild(dsTitle);
-    if (d.deepseek?.ok) {
-      d.deepseek.rows.forEach((b) => {
-        const row = el("div", "flex min-h-5 min-w-0 items-center justify-between gap-2 text-ui-sm");
-        row.appendChild(el("span", "min-w-0 truncate text-foreground-subtle", b.label));
-        const right = el("span", "min-w-0 whitespace-nowrap tabular-nums");
-        right.appendChild(el("span", "font-mono text-foreground", b.text));
-        if (b.sub) right.appendChild(el("span", "text-ui-xs text-foreground-subtle", " · " + b.sub));
-        row.appendChild(right);
-        container.appendChild(row);
-      });
-      const st = el("div", "text-ui-xs");
-      st.style.color = d.deepseek.available ? token("--color-usage-chart-1", "#7ee2a8") : token("--color-warning", "#ffb86c");
-      st.textContent = d.deepseek.available ? "✓ 有余额，可正常调用" : "⚠ 余额不足";
-      container.appendChild(st);
-    } else {
-      const err = el("div", "text-ui-sm", d.deepseek?.error || "查询失败");
-      err.style.color = token("--color-destructive", "#ff7b93");
-      container.appendChild(err);
+    if (scope !== "kimi") {
+      const dsTitle = sectionTitle("DeepSeek 余额");
+      if (scope === "ds") dsTitle.style.marginTop = "0";
+      else dsTitle.style.marginTop = "12px";
+      container.appendChild(dsTitle);
+      if (d.deepseek?.ok) {
+        d.deepseek.rows.forEach((b) => {
+          const row = el("div", "flex min-h-5 min-w-0 items-center justify-between gap-2 text-ui-sm");
+          row.appendChild(el("span", "min-w-0 truncate text-foreground-subtle", b.label));
+          const right = el("span", "min-w-0 whitespace-nowrap tabular-nums");
+          right.appendChild(el("span", "font-mono text-foreground", b.text));
+          if (b.sub) right.appendChild(el("span", "text-ui-xs text-foreground-subtle", " · " + b.sub));
+          row.appendChild(right);
+          container.appendChild(row);
+        });
+        const st = el("div", "text-ui-xs");
+        st.style.color = d.deepseek.available ? "#4D6BFE" : token("--color-warning", "#ffb86c");
+        st.textContent = d.deepseek.available ? "✓ 有余额，可正常调用" : "⚠ 余额不足";
+        container.appendChild(st);
+      } else {
+        const err = el("div", "text-ui-sm", d.deepseek?.error || "查询失败");
+        err.style.color = token("--color-destructive", "#ff7b93");
+        container.appendChild(err);
+      }
     }
   }
 
@@ -303,7 +313,7 @@
     rf.addEventListener("click", async () => {
       rf.textContent = "刷新中…";
       await refresh(true);
-      panelBody(body);
+      panelBody(body, state.panelScope || "all");
       rf.textContent = "↻ 刷新";
     });
     btns.appendChild(rf);
@@ -318,6 +328,7 @@
     document.body.appendChild(p);
     state.panel = p;
     state._panelBody = body;
+    state._panelTitle = title;
     return p;
   }
 
@@ -332,7 +343,10 @@
 
   function openPanel(anchor, sticky) {
     const p = buildPanel();
-    panelBody(state._panelBody);
+    // 环的归属决定面板内容域：Kimi 环只显示 Kimi，DS 环只显示 DeepSeek
+    const scope = anchor.getAttribute && anchor.getAttribute("data-zquota-ring") === "ds" ? "ds" : anchor.getAttribute && anchor.getAttribute("data-zquota-ring") === "kimi" ? "kimi" : "all";
+    state.panelScope = scope;
+    panelBody(state._panelBody, scope);
     state.open = true;
     p.style.display = "block";
     const r = anchor.getBoundingClientRect();
@@ -405,7 +419,7 @@
   }
 
   function renderSettingsBody() {
-    if (state._settingsBody) panelBody(state._settingsBody);
+    if (state._settingsBody) panelBody(state._settingsBody, "all");
   }
 
   // 把页面上出现过的 data-testid 清单写进诊断日志（仅 id 字符串，无用户数据），便于适配新版本
@@ -423,7 +437,7 @@
 
   function renderAll() {
     updateRing();
-    if (state.panel && state.panel.style.display !== "none" && state._panelBody) panelBody(state._panelBody);
+    if (state.panel && state.panel.style.display !== "none" && state._panelBody) panelBody(state._panelBody, state.panelScope || "all");
     renderSettingsBody();
   }
 

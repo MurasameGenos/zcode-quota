@@ -25,4 +25,4 @@ try { rmSync(join(ROOT, "zquota-injector.blob")); } catch {}
 
 console.log(`完成：${EXE}`);
 console.log("自检：");
-execSync(`"${EXE}" version`, { stdio: "inherit" });
+execSync(`"${EXE}" version`, { stdio: ["ignore", "inherit", "inherit"] });
