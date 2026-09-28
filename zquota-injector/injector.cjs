@@ -24,7 +24,7 @@ const { join, dirname, basename } = require("node:path");
 const { execSync } = require("node:child_process");
 const readline = require("node:readline");
 
-const VERSION = "0.1.8";
+const VERSION = "0.1.9";
 const ROOT = __dirname;
 
 // ---------- 载荷加载（SEA 资产或源码目录） ----------
@@ -469,7 +469,7 @@ function runCommand(cmd, asarPath, purge) {
   if (cmd === "uninstall") return uninstall(asarPath, purge);
   if (cmd === "status") return status(asarPath);
   if (cmd === "doctor") return doctor(asarPath);
-  if (cmd === "version") return console.log(VERSION);
+  if (cmd === "version") { console.log(VERSION); return 0; }
   fatal(`未知命令：${cmd}`);
 }
 
@@ -590,9 +590,11 @@ async function cliMain() {
 if (require.main === module) {
   (async () => {
     let code = 0;
+    let ranMenu = false;
     try {
-      const hasCmd = positionalArgs(process.argv.slice(2)).length > 0;
-      if (!hasCmd && isInteractive()) {
+      const positionals = positionalArgs(process.argv.slice(2));
+      if (positionals.length === 0 && isInteractive()) {
+        ranMenu = true;
         await menu();
       } else {
         code = await cliMain();
@@ -601,7 +603,10 @@ if (require.main === module) {
       console.error("✗ " + (e.message || e));
       code = 1;
     }
-    await pause();
+    // 瞬时命令（version）与自动化场景不停驻；其余交互场景停驻等回车
+    const cmd = positionalArgs(process.argv.slice(2))[0];
+    const transient = !ranMenu && (cmd === "version" || code === 0 && cmd === "help");
+    if (!transient) await pause();
     process.exit(code);
   })();
 }

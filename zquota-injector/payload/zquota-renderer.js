@@ -69,17 +69,18 @@
     const p = (n) => String(n).padStart(2, "0");
     return `${p(d.getHours())}:${p(d.getMinutes())}`;
   }
-  function kimiRatio(data) {
+  function kimiRemain(data) {
     const rows = data?.kimi?.rows || [];
     const w = rows.find((r) => r.key === "5h");
-    if (w && w.ratio != null) return w.ratio;
+    if (w && w.remain != null) return w.remain;
     const m = rows.find((r) => r.key === "month");
-    return m ? m.ratio : null;
+    return m && m.remain != null ? m.remain : null;
   }
-  function ringColor(ratio) {
-    if (ratio == null) return token("--color-foreground-subtle", "#9aa3b5");
-    if (ratio >= 0.85) return token("--color-destructive", "#ff7b93");
-    if (ratio >= 0.6) return token("--color-warning", "#ffb86c");
+  // 剩余语义配色：剩得越少越警示（≤15% 红、≤40% 琥珀）
+  function remainColor(remain) {
+    if (remain == null) return token("--color-foreground-subtle", "#9aa3b5");
+    if (remain <= 0.15) return token("--color-destructive", "#ff7b93");
+    if (remain <= 0.4) return token("--color-warning", "#ffb86c");
     return token("--color-usage-chart-1", "#5b8cff");
   }
 
@@ -92,7 +93,7 @@
     // 颜色全部走内联样式 + 显式令牌：GLM 环的"重置机会变绿"等状态样式（祖先类/currentColor 继承）
     // 无法波及本环。Kimi 环颜色由用量分级决定（蓝/琥珀/红）；DeepSeek 环固定用第二色阶。
     const track = token("--color-foreground-subtle", "#9aa3b5");
-    const color = colorOverride || ringColor(ratio);
+    const color = colorOverride || remainColor(ratio);
     return (
       `<svg viewBox="0 0 24 24" fill="none" aria-hidden="true" style="width:1em;height:1em;display:block">` +
       `<circle cx="12" cy="12" r="10" fill="none" transform="rotate(-90 12 12)" ` +
@@ -129,7 +130,8 @@
 
   function updateRing() {
     if (state.kimiBtn?.isConnected) {
-      state.kimiBtn.innerHTML = ringSvg(kimiRatio(state.data));
+      const remain = kimiRemain(state.data);
+      state.kimiBtn.innerHTML = ringSvg(remain, remainColor(remain));
       state.kimiBtn.title = kimiRingTitle();
       state.kimiBtn.setAttribute("aria-label", kimiRingTitle());
     }
@@ -207,20 +209,22 @@
     lab.appendChild(el("span", "min-w-0 truncate text-foreground-subtle", row.label));
     head.appendChild(lab);
     const val = el("div", "relative min-w-0 overflow-hidden whitespace-nowrap text-ui-sm tabular-nums");
-    val.appendChild(el("span", "font-mono text-foreground", row.text || (row.ratio != null ? (row.ratio * 100).toFixed(1) + "%" : "—")));
+    val.appendChild(el("span", "font-mono text-foreground", row.text || "—"));
     head.appendChild(val);
     wrap.appendChild(head);
     // 重置说明
     if (row.resetAbs || row.resetRel) {
       wrap.appendChild(el("div", "text-ui-xs text-foreground-subtle", "重置 " + row.resetAbs + (row.resetRel ? "（" + row.resetRel + "）" : "")));
     }
-    if (row.ratio != null) {
+    // 进度条按「剩余」填充：满条 = 额度充裕，越用越空
+    const remain = row.remain != null ? row.remain : row.ratio != null ? Math.max(0, Math.min(1, 1 - row.ratio)) : null;
+    if (remain != null) {
       const track = el("div", "h-1.5 overflow-hidden rounded-full");
       track.style.backgroundColor = token("--color-surface-hover", "rgba(127,127,127,.18)");
       const fill = el("div", "h-full rounded-full");
-      const pct = Math.max(0, Math.min(100, row.ratio * 100));
+      const pct = Math.max(0, Math.min(100, remain * 100));
       fill.style.width = pct.toFixed(1) + "%";
-      fill.style.backgroundColor = ringColor(row.ratio);
+      fill.style.backgroundColor = remainColor(remain);
       fill.style.transition = "width .5s ease";
       if (pct > 0) fill.style.minWidth = "6px";
       track.appendChild(fill);

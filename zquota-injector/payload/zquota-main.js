@@ -95,14 +95,20 @@ async function fetchQuotaImpl(intervalMinutes) {
       else {
         const rows = [];
         const usages = data?.usages && typeof data.usages === "object" ? data.usages : {};
-        const put = (key, label, ratio, text, iso) => {
+        // 展示语义为「剩余」：ratio 保留 API 的已用比例（canonical），remain = 剩余比例，text 显示 剩 xx.x%
+        const put = (key, label, usedRatio, iso) => {
           const { abs, rel } = splitReset(iso);
-          rows.push({ key, label, ratio, text, resetAbs: abs, resetRel: rel });
+          const remain = usedRatio == null ? null : Math.max(0, Math.min(1, 1 - usedRatio));
+          rows.push({
+            key, label, ratio: usedRatio, remain,
+            text: remain != null ? `剩 ${(remain * 100).toFixed(1)}%` : "—",
+            resetAbs: abs, resetRel: rel,
+          });
         };
         if (Number.isFinite(Number(usages.limit_month_total?.used_ratio)))
-          put("month", "月度总量", Number(usages.limit_month_total.used_ratio), (Number(usages.limit_month_total.used_ratio) * 100).toFixed(1) + "%", usages.limit_month_total.reset_time);
+          put("month", "月度总量", Number(usages.limit_month_total.used_ratio), usages.limit_month_total.reset_time);
         if (Number.isFinite(Number(usages.limit_month_code?.used_ratio)))
-          put("code", "代码模型月度", Number(usages.limit_month_code.used_ratio), (Number(usages.limit_month_code.used_ratio) * 100).toFixed(1) + "%", usages.limit_month_code.reset_time);
+          put("code", "代码模型月度", Number(usages.limit_month_code.used_ratio), usages.limit_month_code.reset_time);
         let win = null;
         for (const item of Array.isArray(data?.limits) ? data.limits : []) {
           const d = item?.detail && typeof item.detail === "object" ? item.detail : item;
@@ -110,6 +116,7 @@ async function fetchQuotaImpl(intervalMinutes) {
           const remaining = Number(d?.remaining);
           if (!Number.isFinite(limit)) continue;
           const ratio = Number.isFinite(remaining) ? (limit - remaining) / limit : null;
+          const remain = Number.isFinite(remaining) ? Math.max(0, Math.min(1, remaining / limit)) : null;
           const w = item?.window || {};
           const mins = /MINUTE/i.test(w.timeUnit || "") ? Number(w.duration) : /HOUR/i.test(w.timeUnit || "") ? Number(w.duration) * 60 : null;
           const { abs, rel } = splitReset(d?.resetTime || d?.reset_at);
@@ -117,7 +124,8 @@ async function fetchQuotaImpl(intervalMinutes) {
             key: "5h",
             label: mins ? `${mins >= 60 ? mins / 60 + " 小时" : mins + " 分钟"}会话窗口` : "会话窗口",
             ratio,
-            text: ratio != null ? (ratio * 100).toFixed(1) + "%" : "",
+            remain,
+            text: remain != null ? `剩 ${(remain * 100).toFixed(1)}%` : "",
             resetAbs: abs,
             resetRel: rel,
           };
