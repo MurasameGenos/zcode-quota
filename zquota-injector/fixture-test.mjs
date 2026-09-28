@@ -142,6 +142,7 @@ const check = (n, ok, extra = "") => { console.log(`${ok ? "✓" : "✗"} ${n}${
     await ev(`document.querySelector('[data-zquota-ring="kimi"]').dispatchEvent(new MouseEvent('mouseenter', {bubbles:false}))`);
     await sleep(400);
     check("悬停 Kimi 环后面板显示", await ev(`document.querySelector('[data-zquota-panel]')?.style.display === 'block'`));
+    check("面板带进场动画（zqIn）", await ev(`(()=>{const p=document.querySelector('[data-zquota-panel]');return p && (p.style.animation||'').includes('zqIn') && !!document.getElementById('zquota-panel-style');})()`));
     const kimiPanelText = await ev(`document.querySelector('[data-zquota-panel]')?.innerText || ''`);
     check("Kimi 环面板只显示 Kimi 区块且为剩余语义", kimiPanelText.toLowerCase().includes("kimi") && kimiPanelText.includes("剩 87.3%") && !kimiPanelText.toLowerCase().includes("deepseek"), kimiPanelText.split("\n").slice(0, 2).join(" / "));
     check("Kimi 面板无 剩 xx/xx 副文本", !kimiPanelText.includes("剩 88/100"));

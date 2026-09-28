@@ -385,18 +385,44 @@
 
   function closePanel() {
     clearTimeout(state.hoverTimer);
+    clearTimeout(state._hideAnim);
     if (state.panel) {
-      state.panel.style.display = "none";
       state.panel.setAttribute("data-sticky", "false");
+      hidePanelAnimated(true);
     }
     state.open = false;
   }
 
+  // 进出场动画（对齐官方 HoverCard 的观感）：进场淡入+上浮，收起快速淡出
+  function ensurePanelStyles() {
+    if (document.getElementById("zquota-panel-style")) return;
+    const s = document.createElement("style");
+    s.id = "zquota-panel-style";
+    s.textContent =
+      "@keyframes zqIn{from{opacity:0;transform:translateY(4px) scale(.98)}to{opacity:1;transform:none}}" +
+      "@keyframes zqOut{from{opacity:1;transform:none}to{opacity:0;transform:translateY(2px) scale(.99)}}";
+    (document.head || document.documentElement).appendChild(s);
+  }
+  function hidePanelAnimated(force) {
+    const p = state.panel;
+    if (!p || p.style.display === "none") return;
+    p.style.animation = "zqOut .12s ease-in forwards";
+    clearTimeout(state._hideAnim);
+    state._hideAnim = setTimeout(() => {
+      const q = state.panel;
+      if (!q) return;
+      if (force || (q.getAttribute("data-sticky") !== "true" && !q.matches(":hover"))) q.style.display = "none";
+      q.style.animation = "";
+    }, 120);
+  }
+
   function openPanel(anchor, sticky) {
     const p = buildPanel();
+    ensurePanelStyles();
     // 关键：取消任何待执行的隐藏定时器，否则"环间移动"时旧 leave 的 250ms 隐藏
     // 会把刚重新打开的面板关掉（表现为面板闪现后消失）
     clearTimeout(state.hoverTimer);
+    clearTimeout(state._hideAnim);
     // 环的归属决定面板内容域：Kimi 环只显示 Kimi，DS 环只显示 DeepSeek
     const scope = anchor.getAttribute && anchor.getAttribute("data-zquota-ring") === "ds" ? "ds" : anchor.getAttribute && anchor.getAttribute("data-zquota-ring") === "kimi" ? "kimi" : "all";
     state.panelScope = scope;
@@ -411,6 +437,10 @@
     if (top < 8) top = r.bottom + 8;
     p.style.left = left + "px";
     p.style.top = top + "px";
+    // 重启进场动画（打断可能进行中的退场）
+    p.style.animation = "none";
+    void p.offsetWidth;
+    p.style.animation = "zqIn .16s ease-out";
     p.setAttribute("data-sticky", sticky ? "true" : "false");
     refresh(); // 打开时若数据过期则刷新
   }
@@ -418,7 +448,7 @@
     clearTimeout(state.hoverTimer);
     state.hoverTimer = setTimeout(() => {
       const p = state.panel;
-      if (p && p.getAttribute("data-sticky") !== "true" && !p.matches(":hover")) p.style.display = "none";
+      if (p && p.getAttribute("data-sticky") !== "true" && !p.matches(":hover")) hidePanelAnimated(false);
     }, 250);
   }
 

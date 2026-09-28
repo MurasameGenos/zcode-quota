@@ -24,7 +24,7 @@ const { join, dirname, basename } = require("node:path");
 const { execSync } = require("node:child_process");
 const readline = require("node:readline");
 
-const VERSION = "0.2.3";
+const VERSION = "0.2.4";
 const ROOT = __dirname;
 
 // ---------- 载荷加载（SEA 资产或源码目录） ----------
