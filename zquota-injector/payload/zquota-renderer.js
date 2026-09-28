@@ -204,15 +204,31 @@
     return btn;
   }
 
+  // 实测官方环 SVG 的渲染宽度，让我们的环（1em）与官方完全同尺寸；拿不到时回退 16px
+  function syncRingSize(trig) {
+    try {
+      const svg = trig.querySelector("svg");
+      const w = svg && svg.getBoundingClientRect().width;
+      const px = w > 4 ? Math.round(w * 100) / 100 : 16;
+      for (const btn of [state.kimiBtn, state.dsBtn]) {
+        if (btn) btn.style.fontSize = px + "px";
+      }
+      return px;
+    } catch (e) {
+      return 16;
+    }
+  }
+
   function mountRing() {
     const trig = document.querySelector(`[data-testid="${TID}"]`);
     if (!trig || !trig.parentElement) return false;
     const parent = trig.parentElement;
     if (state.kimiBtn?.isConnected && state.dsBtn?.isConnected) {
-      // GLM 触发器重建时把我们的环挪到它旁边
+      // GLM 触发器重建时把我们的环挪到它旁边，并重测官方尺寸（官方可能改版）
       if (state.kimiBtn.previousElementSibling !== trig) {
         parent.insertBefore(state.kimiBtn, trig.nextSibling);
         parent.insertBefore(state.dsBtn, state.kimiBtn.nextSibling);
+        syncRingSize(trig);
       }
       return true;
     }
@@ -221,8 +237,9 @@
       state.dsBtn = buildRingBtn(trig, "ds", "DeepSeek 余额");
       parent.insertBefore(state.kimiBtn, trig.nextSibling);
       parent.insertBefore(state.dsBtn, state.kimiBtn.nextSibling);
+      const px = syncRingSize(trig);
       updateRing();
-      log("小环已挂载（Kimi + DeepSeek，克隆自 GLM 触发器）");
+      log(`小环已挂载（Kimi + DeepSeek，克隆自 GLM 触发器，尺寸 ${px}px）`);
       return true;
     } catch (e) {
       log("小环挂载失败：" + e.message);
