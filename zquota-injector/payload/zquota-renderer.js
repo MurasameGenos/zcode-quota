@@ -19,7 +19,7 @@
   }
 
   const TID = "chat-context-usage-trigger";
-  const state = { data: null, error: "", fetching: false, lastFetch: 0, ringBtn: null, panel: null, hoverTimer: null, settingsCard: null, testidsDumped: false };
+  const state = { data: null, error: "", fetching: false, lastFetch: 0, kimiBtn: null, dsBtn: null, panel: null, hoverTimer: null, settingsCard: null, testidsDumped: false };
 
   const log = (m) => {
     console.debug("[zquota]", m);
@@ -83,16 +83,16 @@
     return token("--color-usage-chart-1", "#5b8cff");
   }
 
-  // ---------- 小环 ----------
+  // ---------- 小环（Kimi 用量环 + DeepSeek 余额环） ----------
 
-  function ringSvg(ratio) {
+  function ringSvg(ratio, colorOverride) {
     const C = 2 * Math.PI * 10;
     const used = ratio == null ? 0 : Math.max(0, Math.min(1, ratio));
     const off = C * (1 - used);
     // 颜色全部走内联样式 + 显式令牌：GLM 环的"重置机会变绿"等状态样式（祖先类/currentColor 继承）
-    // 无法波及本环——本环颜色只由 Kimi 用量分级决定（蓝/琥珀/红），与 GLM 状态语义无关。
+    // 无法波及本环。Kimi 环颜色由用量分级决定（蓝/琥珀/红）；DeepSeek 环固定用第二色阶。
     const track = token("--color-foreground-subtle", "#9aa3b5");
-    const color = ringColor(ratio);
+    const color = colorOverride || ringColor(ratio);
     return (
       `<svg viewBox="0 0 24 24" fill="none" aria-hidden="true" style="width:1em;height:1em;display:block">` +
       `<circle cx="12" cy="12" r="10" fill="none" transform="rotate(-90 12 12)" ` +
@@ -103,63 +103,93 @@
     );
   }
 
-  function ringTitle() {
+  function kimiRingTitle() {
     const d = state.data;
-    if (!d) return "外部模型额度（加载中…）";
-    const parts = [];
-    if (d.kimi?.ok) {
-      const w = d.kimi.rows.find((r) => r.key === "5h");
-      const m = d.kimi.rows.find((r) => r.key === "month");
-      const wTxt = w ? ((w.sub || "").replace(/^剩\s*/, "") || w.text) : "";
-      parts.push(`Kimi ${wTxt}${w && m ? " · " : ""}${m ? "月度 " + m.text : ""}`.trim());
-    } else parts.push(`Kimi：${d.kimi?.error || "不可用"}`);
-    if (d.deepseek?.ok) parts.push(`DeepSeek ${d.deepseek.rows[0]?.text || ""}`);
-    else parts.push(`DeepSeek：${d.deepseek?.error || "不可用"}`);
-    return parts.join(" ｜ ");
+    if (!d) return "Kimi 额度（加载中…）";
+    if (!d.kimi?.ok) return `Kimi：${d.kimi?.error || "不可用"}`;
+    const w = d.kimi.rows.find((r) => r.key === "5h");
+    const m = d.kimi.rows.find((r) => r.key === "month");
+    return `Kimi ${w ? "5h " + w.text : ""}${w && m ? " · " : ""}${m ? "月度 " + m.text : ""}`.trim();
+  }
+
+  // DeepSeek 环：以 ¥100 为满
+  const DS_FULL = 100;
+  function dsRatio(data) {
+    const b = data?.deepseek?.rows?.[0];
+    if (!b || b.value == null || !Number.isFinite(Number(b.value))) return null;
+    return Math.max(0, Math.min(1, Number(b.value) / DS_FULL));
+  }
+  function dsRingTitle() {
+    const d = state.data;
+    if (!d) return "DeepSeek 余额（加载中…）";
+    if (!d.deepseek?.ok) return `DeepSeek：${d.deepseek?.error || "不可用"}`;
+    const b = d.deepseek.rows[0];
+    return `DeepSeek 余额 ${b?.text || ""}（满 ¥${DS_FULL}）${d.deepseek.available === false ? " · 余额不足" : ""}`;
   }
 
   function updateRing() {
-    if (!state.ringBtn || !state.ringBtn.isConnected) return;
-    state.ringBtn.innerHTML = ringSvg(kimiRatio(state.data));
-    state.ringBtn.title = ringTitle();
-    state.ringBtn.setAttribute("aria-label", ringTitle());
+    if (state.kimiBtn?.isConnected) {
+      state.kimiBtn.innerHTML = ringSvg(kimiRatio(state.data));
+      state.kimiBtn.title = kimiRingTitle();
+      state.kimiBtn.setAttribute("aria-label", kimiRingTitle());
+    }
+    if (state.dsBtn?.isConnected) {
+      const r = dsRatio(state.data);
+      const color =
+        r == null
+          ? token("--color-foreground-subtle", "#9aa3b5")
+          : state.data?.deepseek?.available === false
+            ? token("--color-warning", "#ffb86c")
+            : token("--color-usage-chart-2", "#2dd4bf");
+      state.dsBtn.innerHTML = ringSvg(r, color);
+      state.dsBtn.title = dsRingTitle();
+      state.dsBtn.setAttribute("aria-label", dsRingTitle());
+    }
+  }
+
+  function buildRingBtn(trig, attrValue, fallbackTitle) {
+    const btn = trig.cloneNode(false); // 复用 GLM 触发器的全部类名（原生观感）
+    btn.removeAttribute("data-testid");
+    btn.removeAttribute("id");
+    btn.setAttribute("data-zquota-ring", attrValue);
+    btn.style.display = "inline-flex";
+    btn.style.alignItems = "center";
+    btn.style.fontSize = "16px"; // svg 用 1em
+    btn.innerHTML = ringSvg(null);
+    btn.title = fallbackTitle;
+    btn.addEventListener("mouseenter", () => openPanel(btn));
+    btn.addEventListener("mouseleave", () => scheduleHidePanel());
+    btn.addEventListener("focus", () => openPanel(btn));
+    btn.addEventListener("blur", () => scheduleHidePanel());
+    btn.addEventListener("click", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      // 再次点击已展开的粘滞面板 → 收起
+      if (state.open && state.panel && state.panel.getAttribute("data-sticky") === "true") closePanel();
+      else openPanel(btn, true);
+    });
+    return btn;
   }
 
   function mountRing() {
     const trig = document.querySelector(`[data-testid="${TID}"]`);
     if (!trig || !trig.parentElement) return false;
-    if (state.ringBtn && state.ringBtn.isConnected) {
+    const parent = trig.parentElement;
+    if (state.kimiBtn?.isConnected && state.dsBtn?.isConnected) {
       // GLM 触发器重建时把我们的环挪到它旁边
-      if (state.ringBtn.previousElementSibling !== trig) trig.parentElement.insertBefore(state.ringBtn, trig.nextSibling);
+      if (state.kimiBtn.previousElementSibling !== trig) {
+        parent.insertBefore(state.kimiBtn, trig.nextSibling);
+        parent.insertBefore(state.dsBtn, state.kimiBtn.nextSibling);
+      }
       return true;
     }
     try {
-      const btn = trig.cloneNode(false); // 复用 GLM 触发器的全部类名（原生观感）
-      btn.removeAttribute("data-testid");
-      btn.removeAttribute("id");
-      btn.setAttribute("data-zquota-ring", "true");
-      btn.style.display = "inline-flex";
-      btn.style.alignItems = "center";
-      btn.style.fontSize = "16px"; // svg 用 1em
-      btn.innerHTML = ringSvg(null);
-      btn.title = "外部模型额度";
-      const show = () => openPanel(btn);
-      const hide = () => scheduleHidePanel();
-      btn.addEventListener("mouseenter", show);
-      btn.addEventListener("mouseleave", hide);
-      btn.addEventListener("focus", show);
-      btn.addEventListener("blur", hide);
-      btn.addEventListener("click", (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        // 再次点击已展开的粘滞面板 → 收起
-        if (state.open && state.panel && state.panel.getAttribute("data-sticky") === "true") closePanel();
-        else openPanel(btn, true);
-      });
-      trig.parentElement.insertBefore(btn, trig.nextSibling);
-      state.ringBtn = btn;
+      state.kimiBtn = buildRingBtn(trig, "kimi", "Kimi 额度");
+      state.dsBtn = buildRingBtn(trig, "ds", "DeepSeek 余额");
+      parent.insertBefore(state.kimiBtn, trig.nextSibling);
+      parent.insertBefore(state.dsBtn, state.kimiBtn.nextSibling);
       updateRing();
-      log("小环已挂载（克隆自 GLM 触发器）");
+      log("小环已挂载（Kimi + DeepSeek，克隆自 GLM 触发器）");
       return true;
     } catch (e) {
       log("小环挂载失败：" + e.message);
@@ -179,12 +209,9 @@
     val.appendChild(el("span", "font-mono text-foreground", row.text || (row.ratio != null ? (row.ratio * 100).toFixed(1) + "%" : "—")));
     head.appendChild(val);
     wrap.appendChild(head);
-    // 次要信息（如 5h 窗口的 剩 xx/xx）与重置说明合并为一条辅助行
-    if (row.sub || row.resetAbs || row.resetRel) {
-      const bits = [];
-      if (row.sub) bits.push(row.sub);
-      if (row.resetAbs || row.resetRel) bits.push("重置 " + row.resetAbs + (row.resetRel ? "（" + row.resetRel + "）" : ""));
-      wrap.appendChild(el("div", "text-ui-xs text-foreground-subtle", bits.join(" · ")));
+    // 重置说明
+    if (row.resetAbs || row.resetRel) {
+      wrap.appendChild(el("div", "text-ui-xs text-foreground-subtle", "重置 " + row.resetAbs + (row.resetRel ? "（" + row.resetRel + "）" : "")));
     }
     if (row.ratio != null) {
       const track = el("div", "h-1.5 overflow-hidden rounded-full");
@@ -285,15 +312,10 @@
     const body = el("div");
     body.style.marginTop = "10px";
     p.appendChild(body);
-    const foot = el("div", "flex items-center justify-between text-ui-xs");
-    foot.style.cssText = `color:${token("--color-foreground-subtle", "#8b93a7")};margin-top:12px;padding-top:8px;border-top:1px solid ${token("--color-border", "rgba(127,127,127,.15)")}`;
-    foot.appendChild(el("span", null, () => (state.data ? `更新于 ${fmtTime(state.data.ts)} · 每 5 分钟` : "—")));
-    foot.appendChild(el("span", null, "ZCodeQuota"));
-    p.appendChild(foot);
-    document.body.appendChild(p);
     // 面板自身的悬停语义：移入取消待隐藏，移出安排隐藏
     p.addEventListener("mouseenter", () => clearTimeout(state.hoverTimer));
     p.addEventListener("mouseleave", () => scheduleHidePanel());
+    document.body.appendChild(p);
     state.panel = p;
     state._panelBody = body;
     return p;
@@ -346,10 +368,6 @@
     h.style.margin = "0 0 4px";
     h.textContent = "外部模型额度";
     card.appendChild(h);
-    const sub = el("p", "text-ui-xs");
-    sub.style.color = token("--color-foreground-subtle", "#9aa3b5");
-    sub.textContent = "Kimi Code 订阅与 DeepSeek API 余额（由 ZCodeQuota 注入）";
-    card.appendChild(sub);
     const body = el("div");
     body.style.marginTop = "12px";
     card.appendChild(body);
@@ -440,7 +458,7 @@
       document.addEventListener("pointerdown", (e) => {
         if (!state.open || !state.panel) return;
         const t = e.target;
-        if (state.panel.contains(t) || (state.ringBtn && state.ringBtn.contains(t))) return;
+        if (state.panel.contains(t) || (state.kimiBtn && state.kimiBtn.contains(t)) || (state.dsBtn && state.dsBtn.contains(t))) return;
         closePanel();
       });
       document.addEventListener("keydown", (e) => {

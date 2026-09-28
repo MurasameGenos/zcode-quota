@@ -118,7 +118,6 @@ async function fetchQuotaImpl(intervalMinutes) {
             label: mins ? `${mins >= 60 ? mins / 60 + " 小时" : mins + " 分钟"}会话窗口` : "会话窗口",
             ratio,
             text: ratio != null ? (ratio * 100).toFixed(1) + "%" : "",
-            sub: Number.isFinite(remaining) ? `剩 ${remaining}/${limit}` : "",
             resetAbs: abs,
             resetRel: rel,
           };
@@ -146,6 +145,7 @@ async function fetchQuotaImpl(intervalMinutes) {
           key: b.currency,
           label: b.currency === "CNY" ? "人民币余额" : `${b.currency} 余额`,
           text: `¥${b.total_balance}`,
+          value: Number(b.total_balance),
           sub: `充值 ${b.topped_up_balance} · 赠送 ${b.granted_balance}`,
         }));
         payload.deepseek.available = Boolean(data?.is_available);

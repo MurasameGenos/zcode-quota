@@ -30,7 +30,7 @@ const payload = {
   kimi: {
     ok: true,
     rows: [
-      { key: "5h", label: "5 小时会话窗口", ratio: 0.12, text: "12.0%", sub: "剩 88/100", resetAbs: "09-27 13:46", resetRel: "4小时后" },
+      { key: "5h", label: "5 小时会话窗口", ratio: 0.12, text: "12.0%", resetAbs: "09-27 13:46", resetRel: "4小时后" },
       { key: "month", label: "月度总量", ratio: 0.127, text: "12.7%", resetAbs: "10-26 08:00", resetRel: "29天后" },
       { key: "code", label: "代码模型月度", ratio: 0.116, text: "11.6%", resetAbs: "10-26 08:00", resetRel: "29天后" },
     ],
@@ -38,7 +38,7 @@ const payload = {
   deepseek: {
     ok: true,
     available: true,
-    rows: [{ key: "CNY", label: "人民币余额", text: "¥13.23", sub: "充值 13.23 · 赠送 0.00" }],
+    rows: [{ key: "CNY", label: "人民币余额", text: "¥13.23", value: 13.23, sub: "充值 13.23 · 赠送 0.00" }],
   },
 };
 
@@ -120,30 +120,33 @@ const check = (n, ok, extra = "") => { console.log(`${ok ? "✓" : "✗"} ${n}${
     const ev = async (expr) => (await send("Runtime.evaluate", { expression: expr, returnByValue: true })).result.value;
 
     check("渲染脚本已执行", await ev("!!window.__ZQUOTA_RENDERER__"));
-    check("小环已注入到 GLM 触发器旁", await ev(`!!document.querySelector('[data-zquota-ring]') && document.querySelector('[data-zquota-ring]').previousElementSibling?.getAttribute('data-testid') === 'chat-context-usage-trigger'`));
-    const ringSvgOk = await ev(`!!document.querySelector('[data-zquota-ring] svg circle[style*="stroke-dasharray"]')`);
+    check("Kimi 环注入到 GLM 触发器旁", await ev(`!!document.querySelector('[data-zquota-ring="kimi"]') && document.querySelector('[data-zquota-ring="kimi"]').previousElementSibling?.getAttribute('data-testid') === 'chat-context-usage-trigger'`));
+    check("DeepSeek 环紧跟 Kimi 环", await ev(`(()=>{const k=document.querySelector('[data-zquota-ring="kimi"]'),d=document.querySelector('[data-zquota-ring="ds"]');return !!(k&&d&&d.previousElementSibling===k);})()`));
+    const ringSvgOk = await ev(`!!document.querySelector('[data-zquota-ring="kimi"] svg circle[style*="stroke-dasharray"]')`);
     check("小环 SVG 就位", ringSvgOk);
-    check("环颜色内联固定（不受状态类影响）", await ev(`(()=>{const c=document.querySelector('[data-zquota-ring] svg circle[style*="stroke-dasharray"]');return c && c.style.stroke.includes('var(') && !c.getAttribute('stroke');})()`));
-    check("小环 title 含实时数据", await ev(`(document.querySelector('[data-zquota-ring]')?.title || '').includes('88/100')`));
+    check("环颜色内联固定（不受状态类影响）", await ev(`(()=>{const c=document.querySelector('[data-zquota-ring="kimi"] svg circle[style*="stroke-dasharray"]');return c && c.style.stroke.includes('var(') && !c.getAttribute('stroke');})()`));
+    check("Kimi 环 title 含实时数据", await ev(`(document.querySelector('[data-zquota-ring="kimi"]')?.title || '').includes('12.0%')`));
+    check("DeepSeek 环以 ¥100 为满显示进度", await ev(`(()=>{const d=document.querySelector('[data-zquota-ring="ds"]');if(!d)return false;const c=d.querySelector('circle[style*="stroke-dasharray"]');if(!c)return false;const off=parseFloat(c.style.strokeDashoffset);const C=2*Math.PI*10;const ratio=1-off/C;return Math.abs(ratio-13.23/100)<0.005 && (d.title||'').includes('¥13.23');})()`));
 
     // 悬停展开面板
-    await ev(`document.querySelector('[data-zquota-ring]').dispatchEvent(new MouseEvent('mouseenter', {bubbles:false}))`);
+    await ev(`document.querySelector('[data-zquota-ring="kimi"]').dispatchEvent(new MouseEvent('mouseenter', {bubbles:false}))`);
     await sleep(400);
     check("悬停后面板显示", await ev(`document.querySelector('[data-zquota-panel]')?.style.display === 'block'`));
     check("面板无毛玻璃（实底+无模糊）", await ev(`(()=>{const p=document.querySelector('[data-zquota-panel]');const s=getComputedStyle(p);const opaque=s.backgroundColor;return s.backdropFilter==='none'&&s.webkitBackdropFilter!=='blur(8px)'&&!!opaque;})()`));
     const panelText = await ev(`document.querySelector('[data-zquota-panel]')?.innerText || ''`);
-    check("面板含 Kimi 区块", panelText.includes("月度总量") && panelText.includes("12.0%") && panelText.includes("剩 88/100"), panelText.split("\n").slice(0, 3).join(" / "));
+    check("面板含 Kimi 区块（无 剩 xx/xx 副文本）", panelText.includes("月度总量") && panelText.includes("12.0%") && !panelText.includes("剩 88/100"), panelText.split("\n").slice(0, 3).join(" / "));
     check("面板含 DeepSeek 余额", panelText.includes("¥13.23") && panelText.includes("可正常调用"));
     check("面板含重置时间", panelText.includes("29天后"));
+    check("面板无底部说明行", !panelText.includes("更新于") && !panelText.includes("ZCodeQuota"));
 
     // 面板关闭：粘滞打开 → 点击面板外 → 收起；Esc 同理
-    await ev(`document.querySelector('[data-zquota-ring]').click()`);
+    await ev(`document.querySelector('[data-zquota-ring="kimi"]').click()`);
     await sleep(200);
     check("点击小环粘滞展开", await ev(`document.querySelector('[data-zquota-panel]')?.style.display === 'block' && document.querySelector('[data-zquota-panel]').getAttribute('data-sticky') === 'true'`));
     await ev(`document.body.dispatchEvent(new PointerEvent('pointerdown', {bubbles:true}))`);
     await sleep(200);
     check("点击外部收起面板", await ev(`document.querySelector('[data-zquota-panel]')?.style.display === 'none'`));
-    await ev(`document.querySelector('[data-zquota-ring]').dispatchEvent(new MouseEvent('mouseenter', {bubbles:false}))`);
+    await ev(`document.querySelector('[data-zquota-ring="ds"]').dispatchEvent(new MouseEvent('mouseenter', {bubbles:false}))`);
     await sleep(200);
     await ev(`document.dispatchEvent(new KeyboardEvent('keydown', {key:'Escape', bubbles:true}))`);
     await sleep(150);
@@ -151,8 +154,8 @@ const check = (n, ok, extra = "") => { console.log(`${ok ? "✓" : "✗"} ${n}${
 
     // 设置页区块
     check("设置区块已挂载", await ev(`!!document.querySelector('[data-zquota-settings]')`));
-    const settingsText = await ev(`document.querySelector('[data-zquota-settings]')?.innerText || ''`);
-    check("设置区块含两家数据", settingsText.includes("Kimi") && settingsText.includes("DeepSeek"));
+    const settingsText = (await ev(`document.querySelector('[data-zquota-settings]')?.innerText || ''`)).toLowerCase();
+    check("设置区块含两家数据（标题被 CSS 大写，忽略大小写匹配）", settingsText.includes("kimi") && settingsText.includes("deepseek"));
 
     // 刷新按钮可用（点击后面板仍在且无异常）
     await ev(`[...document.querySelectorAll('[data-zquota-panel] button')].find(b => b.textContent.includes('刷新'))?.click()`);
