@@ -81,32 +81,39 @@
 
   function ringSvg(ratio, colorOverride) {
     const C = 2 * Math.PI * 10;
+    // 圆头补偿：round cap 在弧两端各多画半个线宽（共 4），可用弧长减 4，
+    // 使 100% 时圆头恰好到达端点、87% 等中间值能看出明确缺口
+    const usable = C - 4;
     const used = ratio == null ? 0 : Math.max(0, Math.min(1, ratio));
-    const off = C * (1 - used);
-    // 颜色全部走内联样式 + 显式令牌：GLM 环的"重置机会变绿"等状态样式（祖先类/currentColor 继承）
-    // 无法波及本环。Kimi 环颜色由用量分级决定（蓝/琥珀/红）；DeepSeek 环固定品牌色。
+    const off = usable * (1 - used);
     const track = token("--color-foreground-subtle", "#9aa3b5");
     const color = colorOverride || remainColor(ratio);
     return (
       `<svg viewBox="0 0 24 24" fill="none" aria-hidden="true" style="width:1em;height:1em;display:block">` +
       `<circle cx="12" cy="12" r="10" fill="none" transform="rotate(-90 12 12)" ` +
       `style="stroke:${track};stroke-width:4;opacity:.22"/>` +
-      `<circle cx="12" cy="12" r="10" fill="none" transform="rotate(-90 12 12)" stroke-linecap="round" ` +
-      `style="stroke:${color};stroke-width:4;stroke-dasharray:${C.toFixed(2)};stroke-dashoffset:${off.toFixed(2)};` +
-      `transition:stroke-dashoffset .5s ease,stroke .3s"/></svg>`
+      (used > 0
+        ? `<circle cx="12" cy="12" r="10" fill="none" transform="rotate(-90 12 12)" stroke-linecap="round" ` +
+          `style="stroke:${color};stroke-width:4;stroke-dasharray:${usable.toFixed(2)};stroke-dashoffset:${off.toFixed(2)};` +
+          `transition:stroke-dashoffset .5s ease,stroke .3s"/>`
+        : "") +
+      `</svg>`
     );
   }
 
   // Kimi 上下双半环：上半 = 5 小时额度剩余，下半 = 月度额度剩余；
-  // 各半独立按剩余比例填充与分级配色（半圆弧长 πr）
+  // 各半独立按剩余比例填充与分级配色（半圆弧长 πr，含同样的圆头补偿）
   function kimiRingSvg(topRemain, bottomRemain) {
     const HALF = Math.PI * 10;
+    const usable = HALF - 4; // 补偿两端 round cap
     const track = token("--color-foreground-subtle", "#9aa3b5");
     const clamp01 = (v) => (v == null ? 0 : Math.max(0, Math.min(1, v)));
-    const half = (d, remain, extra = "") =>
-      `<path d="${d}" fill="none" stroke-linecap="round" style="stroke:${remain == null ? track : remainColor(remain)};stroke-width:4;` +
-      `stroke-dasharray:${HALF.toFixed(2)};stroke-dashoffset:${(HALF * (1 - clamp01(remain))).toFixed(2)};` +
-      `opacity:${remain == null ? ".22" : "1"};transition:stroke-dashoffset .5s ease,stroke .3s${extra}"/>`;
+    const half = (d, remain) =>
+      remain == null || clamp01(remain) <= 0
+        ? ""
+        : `<path d="${d}" fill="none" stroke-linecap="round" style="stroke:${remainColor(remain)};stroke-width:4;` +
+          `stroke-dasharray:${usable.toFixed(2)};stroke-dashoffset:${(usable * (1 - clamp01(remain))).toFixed(2)};` +
+          `transition:stroke-dashoffset .5s ease,stroke .3s"/>`;
     return (
       `<svg viewBox="0 0 24 24" fill="none" aria-hidden="true" style="width:1em;height:1em;display:block">` +
       // 轨道两半
