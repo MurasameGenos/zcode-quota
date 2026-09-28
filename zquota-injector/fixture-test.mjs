@@ -122,11 +122,11 @@ const check = (n, ok, extra = "") => { console.log(`${ok ? "✓" : "✗"} ${n}${
     check("渲染脚本已执行", await ev("!!window.__ZQUOTA_RENDERER__"));
     check("Kimi 环注入到 GLM 触发器旁", await ev(`!!document.querySelector('[data-zquota-ring="kimi"]') && document.querySelector('[data-zquota-ring="kimi"]').previousElementSibling?.getAttribute('data-testid') === 'chat-context-usage-trigger'`));
     check("DeepSeek 环紧跟 Kimi 环", await ev(`(()=>{const k=document.querySelector('[data-zquota-ring="kimi"]'),d=document.querySelector('[data-zquota-ring="ds"]');return !!(k&&d&&d.previousElementSibling===k);})()`));
-    const ringSvgOk = await ev(`!!document.querySelector('[data-zquota-ring="kimi"] svg circle[style*="stroke-dasharray"]')`);
+    const ringSvgOk = await ev(`!!document.querySelector('[data-zquota-ring="kimi"] path[style*="stroke-dasharray"]')`);
     check("小环 SVG 就位", ringSvgOk);
-    check("环颜色内联固定（不受状态类影响）", await ev(`(()=>{const c=document.querySelector('[data-zquota-ring="kimi"] svg circle[style*="stroke-dasharray"]');return c && c.style.stroke.includes('var(') && !c.getAttribute('stroke');})()`));
+    check("环颜色内联固定（不受状态类影响）", await ev(`(()=>{const c=document.querySelector('[data-zquota-ring="kimi"] path[style*="stroke-dasharray"]');return c && c.style.stroke.includes('var(') && !c.getAttribute('stroke');})()`));
     check("Kimi 环 aria-label 含剩余数据且无原生 title", await ev(`(()=>{const k=document.querySelector('[data-zquota-ring="kimi"]');return (k.getAttribute('aria-label')||'').includes('剩 88.0%') && !k.hasAttribute('title');})()`));
-    check("Kimi 环填充量 = 剩余比例（0.88）", await ev(`(()=>{const k=document.querySelector('[data-zquota-ring="kimi"]');const c=k&&k.querySelector('circle[style*="stroke-dasharray"]');if(!c)return false;const off=parseFloat(c.style.strokeDashoffset);const ratio=1-off/(2*Math.PI*10);return Math.abs(ratio-0.88)<0.005;})()`));
+    check("Kimi 环上下双半环（上半 5h=0.88，下半月度=0.873）", await ev(`(()=>{const k=document.querySelector('[data-zquota-ring="kimi"]');if(!k)return false;const ps=[...k.querySelectorAll('path[style*="stroke-dasharray"]')];if(ps.length<2)return false;const HALF=Math.PI*10;const top=1-parseFloat(ps[0].style.strokeDashoffset)/HALF;const bot=1-parseFloat(ps[1].style.strokeDashoffset)/HALF;return Math.abs(top-0.88)<0.005&&Math.abs(bot-0.873)<0.005;})()`));
     check("DeepSeek 环以 ¥100 为满显示进度且用主题色 #4D6BFE", await ev(`(()=>{const d=document.querySelector('[data-zquota-ring="ds"]');if(!d)return false;const c=d.querySelector('circle[style*="stroke-dasharray"]');if(!c)return false;const off=parseFloat(c.style.strokeDashoffset);const C=2*Math.PI*10;const ratio=1-off/C;const col=getComputedStyle(c).stroke;return Math.abs(ratio-13.23/100)<0.005 && (d.getAttribute('aria-label')||'').includes('¥13.23') && !d.hasAttribute('title') && (col==='rgb(77, 107, 254)'||col==='#4d6bfe');})()`));
 
     // 环间移动不闪没：Kimi leave → 立即 DS enter → 300ms 后面板仍显示

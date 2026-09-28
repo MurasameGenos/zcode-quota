@@ -69,13 +69,6 @@
     const p = (n) => String(n).padStart(2, "0");
     return `${p(d.getHours())}:${p(d.getMinutes())}`;
   }
-  function kimiRemain(data) {
-    const rows = data?.kimi?.rows || [];
-    const w = rows.find((r) => r.key === "5h");
-    if (w && w.remain != null) return w.remain;
-    const m = rows.find((r) => r.key === "month");
-    return m && m.remain != null ? m.remain : null;
-  }
   // 剩余语义配色：剩得越少越警示（≤15% 红、≤40% 琥珀）
   function remainColor(remain) {
     if (remain == null) return token("--color-foreground-subtle", "#9aa3b5");
@@ -91,7 +84,7 @@
     const used = ratio == null ? 0 : Math.max(0, Math.min(1, ratio));
     const off = C * (1 - used);
     // 颜色全部走内联样式 + 显式令牌：GLM 环的"重置机会变绿"等状态样式（祖先类/currentColor 继承）
-    // 无法波及本环。Kimi 环颜色由用量分级决定（蓝/琥珀/红）；DeepSeek 环固定用第二色阶。
+    // 无法波及本环。Kimi 环颜色由用量分级决定（蓝/琥珀/红）；DeepSeek 环固定品牌色。
     const track = token("--color-foreground-subtle", "#9aa3b5");
     const color = colorOverride || remainColor(ratio);
     return (
@@ -102,6 +95,35 @@
       `style="stroke:${color};stroke-width:4;stroke-dasharray:${C.toFixed(2)};stroke-dashoffset:${off.toFixed(2)};` +
       `transition:stroke-dashoffset .5s ease,stroke .3s"/></svg>`
     );
+  }
+
+  // Kimi 上下双半环：上半 = 5 小时额度剩余，下半 = 月度额度剩余；
+  // 各半独立按剩余比例填充与分级配色（半圆弧长 πr）
+  function kimiRingSvg(topRemain, bottomRemain) {
+    const HALF = Math.PI * 10;
+    const track = token("--color-foreground-subtle", "#9aa3b5");
+    const clamp01 = (v) => (v == null ? 0 : Math.max(0, Math.min(1, v)));
+    const half = (d, remain, extra = "") =>
+      `<path d="${d}" fill="none" stroke-linecap="round" style="stroke:${remain == null ? track : remainColor(remain)};stroke-width:4;` +
+      `stroke-dasharray:${HALF.toFixed(2)};stroke-dashoffset:${(HALF * (1 - clamp01(remain))).toFixed(2)};` +
+      `opacity:${remain == null ? ".22" : "1"};transition:stroke-dashoffset .5s ease,stroke .3s${extra}"/>`;
+    return (
+      `<svg viewBox="0 0 24 24" fill="none" aria-hidden="true" style="width:1em;height:1em;display:block">` +
+      // 轨道两半
+      `<path d="M 2 12 A 10 10 0 0 1 22 12" fill="none" style="stroke:${track};stroke-width:4;opacity:.22"/>` +
+      `<path d="M 22 12 A 10 10 0 0 1 2 12" fill="none" style="stroke:${track};stroke-width:4;opacity:.22"/>` +
+      // 上半：5 小时；下半：月度
+      half("M 2 12 A 10 10 0 0 1 22 12", topRemain) +
+      half("M 22 12 A 10 10 0 0 1 2 12", bottomRemain) +
+      `</svg>`
+    );
+  }
+
+  function kimiHalves(data) {
+    const rows = data?.kimi?.rows || [];
+    const w = rows.find((r) => r.key === "5h");
+    const m = rows.find((r) => r.key === "month");
+    return { top: w ? w.remain : null, bottom: m ? m.remain : null };
   }
 
   function kimiRingTitle() {
@@ -132,8 +154,8 @@
     // 不设置 title：原生 tooltip（悬停弹出的系统黑框）不需要，信息由悬停面板承载；
     // aria-label 保留给无障碍读屏
     if (state.kimiBtn?.isConnected) {
-      const remain = kimiRemain(state.data);
-      state.kimiBtn.innerHTML = ringSvg(remain, remainColor(remain));
+      const halves = kimiHalves(state.data);
+      state.kimiBtn.innerHTML = kimiRingSvg(halves.top, halves.bottom);
       state.kimiBtn.setAttribute("aria-label", kimiRingTitle());
     }
     if (state.dsBtn?.isConnected) {
