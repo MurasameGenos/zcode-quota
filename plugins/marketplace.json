@@ -1,0 +1,18 @@
+{
+  "name": "dev-zcode-plugin-513f35ae",
+  "plugins": [
+    {
+      "name": "model-quota",
+      "source": "./model-quota",
+      "version": "0.1.0",
+      "description": "Query Kimi Code subscription quota and DeepSeek API balance from local ZCode provider config.",
+      "displayName": "模型额度查询",
+      "displayName_i18n": {
+        "zh-CN": "模型额度查询"
+      },
+      "description_i18n": {
+        "zh-CN": "查询 Kimi Code 订阅额度与 DeepSeek API 余额"
+      }
+    }
+  ]
+}

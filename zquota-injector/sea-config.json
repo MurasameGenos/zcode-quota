@@ -1,0 +1,11 @@
+{
+  "main": "injector.cjs",
+  "output": "zquota-injector.blob",
+  "disableExperimentalSEAWarning": true,
+  "useSnapshot": false,
+  "useCodeCache": false,
+  "assets": {
+    "zquota-main.js": "payload/zquota-main.js",
+    "zquota-renderer.js": "payload/zquota-renderer.js"
+  }
+}

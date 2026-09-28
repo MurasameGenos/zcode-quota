@@ -1,0 +1,7 @@
+{
+  "zcodePath": "",
+  "port": 9336,
+  "intervalMinutes": 5,
+  "kimi": true,
+  "deepseek": true
+}

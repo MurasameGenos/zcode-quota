@@ -1,0 +1,11 @@
+{
+  "name": "model-quota",
+  "version": "0.1.0",
+  "description": "Query Kimi Code subscription quota and DeepSeek API balance from local ZCode provider config.",
+  "author": {
+    "name": "unnat"
+  },
+  "license": "MIT",
+  "commands": "./commands",
+  "skills": "./skills"
+}
