@@ -129,10 +129,11 @@
   }
 
   function updateRing() {
+    // 不设置 title：原生 tooltip（悬停弹出的系统黑框）不需要，信息由悬停面板承载；
+    // aria-label 保留给无障碍读屏
     if (state.kimiBtn?.isConnected) {
       const remain = kimiRemain(state.data);
       state.kimiBtn.innerHTML = ringSvg(remain, remainColor(remain));
-      state.kimiBtn.title = kimiRingTitle();
       state.kimiBtn.setAttribute("aria-label", kimiRingTitle());
     }
     if (state.dsBtn?.isConnected) {
@@ -145,7 +146,6 @@
             ? token("--color-warning", "#ffb86c")
             : "#4D6BFE";
       state.dsBtn.innerHTML = ringSvg(r, color);
-      state.dsBtn.title = dsRingTitle();
       state.dsBtn.setAttribute("aria-label", dsRingTitle());
     }
   }
@@ -154,12 +154,13 @@
     const btn = trig.cloneNode(false); // 复用 GLM 触发器的全部类名（原生观感）
     btn.removeAttribute("data-testid");
     btn.removeAttribute("id");
+    btn.removeAttribute("title"); // 克隆可能带上原生 tooltip，去掉（黑框小窗）
     btn.setAttribute("data-zquota-ring", attrValue);
     btn.style.display = "inline-flex";
     btn.style.alignItems = "center";
     btn.style.fontSize = "16px"; // svg 用 1em
     btn.innerHTML = ringSvg(null);
-    btn.title = fallbackTitle;
+    btn.setAttribute("aria-label", fallbackTitle);
     btn.addEventListener("mouseenter", () => openPanel(btn));
     btn.addEventListener("mouseleave", () => scheduleHidePanel());
     btn.addEventListener("focus", () => openPanel(btn));
@@ -347,6 +348,9 @@
 
   function openPanel(anchor, sticky) {
     const p = buildPanel();
+    // 关键：取消任何待执行的隐藏定时器，否则"环间移动"时旧 leave 的 250ms 隐藏
+    // 会把刚重新打开的面板关掉（表现为面板闪现后消失）
+    clearTimeout(state.hoverTimer);
     // 环的归属决定面板内容域：Kimi 环只显示 Kimi，DS 环只显示 DeepSeek
     const scope = anchor.getAttribute && anchor.getAttribute("data-zquota-ring") === "ds" ? "ds" : anchor.getAttribute && anchor.getAttribute("data-zquota-ring") === "kimi" ? "kimi" : "all";
     state.panelScope = scope;
