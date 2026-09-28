@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "description": "Query Kimi Code subscription quota and DeepSeek API balance from local ZCode provider config.",
   "author": {
-    "name": "unnat"
+    "name": "MurasameGenos"
   },
   "license": "MIT",
   "commands": "./commands",
