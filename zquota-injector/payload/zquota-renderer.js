@@ -191,7 +191,7 @@
     btn.innerHTML = ringSvg(null);
     btn.setAttribute("aria-label", fallbackTitle);
     btn.addEventListener("mouseenter", () => openPanel(btn));
-    btn.addEventListener("mouseleave", () => scheduleHidePanel());
+    btn.addEventListener("mouseleave", (e) => scheduleHidePanel(e));
     btn.addEventListener("focus", () => openPanel(btn));
     btn.addEventListener("blur", () => scheduleHidePanel());
     btn.addEventListener("click", (e) => {
@@ -375,7 +375,7 @@
     p.appendChild(body);
     // 面板自身的悬停语义：移入取消待隐藏，移出安排隐藏
     p.addEventListener("mouseenter", () => clearTimeout(state.hoverTimer));
-    p.addEventListener("mouseleave", () => scheduleHidePanel());
+    p.addEventListener("mouseleave", (e) => scheduleHidePanel(e));
     document.body.appendChild(p);
     state.panel = p;
     state._panelBody = body;
@@ -444,11 +444,30 @@
     p.setAttribute("data-sticky", sticky ? "true" : "false");
     refresh(); // 打开时若数据过期则刷新
   }
-  function scheduleHidePanel() {
+  function scheduleHidePanel(evt) {
     clearTimeout(state.hoverTimer);
+    clearTimeout(state._hideAnim);
+    const p = state.panel;
+    if (!p || p.getAttribute("data-sticky") === "true") return;
+    // 判断去向：移向我们自己的面板/环 → 保留 250ms 回桥缓冲（鼠标可移进面板）；
+    // 移向其他任何地方（含官方环）→ 立即隐藏，不做退场动画——官方 HoverCard 是
+    // openDelay/closeDelay=0 瞬开瞬关，缓冲期会与官方卡片重叠
+    const to = evt && (evt.relatedTarget || evt.toElement);
+    const staying =
+      to &&
+      ((p.contains && p.contains(to)) ||
+        (state.kimiBtn && state.kimiBtn.contains(to)) ||
+        (state.dsBtn && state.dsBtn.contains(to)) ||
+        (to.closest && to.closest('[data-zquota-ring],[data-zquota-panel]')));
+    if (!staying) {
+      p.style.display = "none";
+      p.style.animation = "";
+      state.open = false;
+      return;
+    }
     state.hoverTimer = setTimeout(() => {
-      const p = state.panel;
-      if (p && p.getAttribute("data-sticky") !== "true" && !p.matches(":hover")) hidePanelAnimated(false);
+      const q = state.panel;
+      if (q && q.getAttribute("data-sticky") !== "true" && !q.matches(":hover")) hidePanelAnimated(false);
     }, 250);
   }
 

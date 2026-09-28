@@ -138,6 +138,20 @@ const check = (n, ok, extra = "") => { console.log(`${ok ? "✓" : "✗"} ${n}${
     await sleep(400);
     check("环间移动面板不消失（无闪没）", await ev(`document.querySelector('[data-zquota-panel]')?.style.display === 'block'`));
 
+    // 移向官方环（relatedTarget=官方触发器）：立即隐藏，不与官方卡片重叠
+    await ev(`document.querySelector('[data-zquota-ring="kimi"]').dispatchEvent(new MouseEvent('mouseleave', {bubbles:false, relatedTarget: document.querySelector('[data-testid="chat-context-usage-trigger"]')}))`);
+    await sleep(50);
+    check("移向官方环立即隐藏（无重叠窗口）", await ev(`document.querySelector('[data-zquota-panel]')?.style.display === 'none'`));
+
+    // 移向我们自己的面板（relatedTarget=panel）：保留 250ms 回桥缓冲
+    await ev(`document.querySelector('[data-zquota-ring="kimi"]').dispatchEvent(new MouseEvent('mouseenter', {bubbles:false}))`);
+    await sleep(100);
+    await ev(`document.querySelector('[data-zquota-ring="kimi"]').dispatchEvent(new MouseEvent('mouseleave', {bubbles:false, relatedTarget: document.querySelector('[data-zquota-panel]')}))`);
+    await sleep(100);
+    check("移向面板保留回桥缓冲（250ms 内仍显示）", await ev(`document.querySelector('[data-zquota-panel]')?.style.display === 'block'`));
+    await sleep(500);
+    check("缓冲期后自然隐藏", await ev(`document.querySelector('[data-zquota-panel]')?.style.display === 'none'`));
+
     // 悬停 Kimi 环 → 面板只含 Kimi 区块
     await ev(`document.querySelector('[data-zquota-ring="kimi"]').dispatchEvent(new MouseEvent('mouseenter', {bubbles:false}))`);
     await sleep(400);
