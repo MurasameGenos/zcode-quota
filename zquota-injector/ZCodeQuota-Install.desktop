@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Version=1.0
+Name=安装 ZCodeQuota
+Name[en]=Install ZCodeQuota
+Comment=把 Kimi/DeepSeek 额度显示注入 ZCode（需先完全退出 ZCode）
+Comment[en]=Inject Kimi/DeepSeek quota display into ZCode (quit ZCode first)
+# %k 在文件管理器中双击时展开为本 desktop 文件路径，从而定位同目录脚本
+Exec=bash -c 'D="$(dirname "$(readlink -f "%k")")" && "$D/install-linux.sh"'
+Terminal=true
+Categories=Utility;

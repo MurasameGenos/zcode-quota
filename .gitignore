@@ -13,3 +13,5 @@ Thumbs.db
 # Linux 交叉构建缓存与产物
 .sea-linux/
 ZCodeQuotaInjector-linux-x64
+*.zip
+zquota-injector-linux.tar.gz

@@ -69,9 +69,16 @@ node build-exe.mjs     # Node SEA + postject → ZCodeQuotaInjector.exe
 
 ## Linux
 
-v0.3.0 起支持。两种使用方式：
+v0.3.0 起支持，适用于主流 glibc 发行版。下载 `zquota-injector-linux.tar.gz` 解压后：
 
-**方式 A：单文件可执行（实验性，未在真实 Linux 环境上运行验证）**
+**方式 A：双击一键安装/卸载（推荐）**
+
+1. 解压后进入目录，**双击 `ZCodeQuota-Install.desktop`** → 终端窗口自动弹出执行安装（需要 root 时弹 pkexec/sudo 授权）
+2. 卸载：双击 `ZCodeQuota-Uninstall.desktop`（字节级还原原版）
+
+说明：首次双击 .desktop 时，文件管理器会提示"未受信任的启动器"——点击"允许并启动"即可（GNOME 的安全机制）。若你的桌面环境不支持 `%k` 定位（极少数），可右键 `install-linux.sh` → "在终端中运行"，效果相同。
+
+**方式 B：单文件可执行（实验性，未在真实 Linux 环境上运行验证）**
 
 ```bash
 chmod +x ZCodeQuotaInjector-linux-x64
@@ -79,11 +86,12 @@ chmod +x ZCodeQuotaInjector-linux-x64
 ./ZCodeQuotaInjector-linux-x64 install    # 命令行
 ```
 
-**方式 B：脚本方式（推荐，需系统 Node ≥ 18）**
+**方式 C：脚本方式（需系统 Node ≥ 18）**
 
 ```bash
-./zquota-injector.sh              # 交互菜单
-./zquota-injector.sh install      # 命令行
+./install-linux.sh     # 一键安装
+./uninstall-linux.sh   # 一键卸载
+./zquota-injector.sh   # 交互菜单
 ```
 
 平台差异说明：

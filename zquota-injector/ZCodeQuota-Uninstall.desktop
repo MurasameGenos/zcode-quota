@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Version=1.0
+Name=卸载 ZCodeQuota
+Name[en]=Uninstall ZCodeQuota
+Comment=还原原版 ZCode（字节级还原 app.asar）
+Comment[en]=Restore the original ZCode (byte-identical app.asar)
+Exec=bash -c 'D="$(dirname "$(readlink -f "%k")")" && "$D/uninstall-linux.sh"'
+Terminal=true
+Categories=Utility;
