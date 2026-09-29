@@ -67,11 +67,11 @@ node build-exe.mjs     # Node SEA + postject → ZCodeQuotaInjector.exe
 - 多窗口（如独立设置的窗口）各自会注入一份 UI。
 - 与任何 asar 改包方案一样：极小概率触发 SmartScreen/杀软启发式扫描（本工具只追加内容、不改可执行文件）。
 
-## Linux（Ubuntu）
+## Linux
 
 v0.3.0 起支持。两种使用方式：
 
-**方式 A：单文件可执行（实验性，未在真实 Ubuntu 上运行验证）**
+**方式 A：单文件可执行（实验性，未在真实 Linux 环境上运行验证）**
 
 ```bash
 chmod +x ZCodeQuotaInjector-linux-x64
@@ -94,7 +94,7 @@ chmod +x ZCodeQuotaInjector-linux-x64
 - **AppImage 版 ZCode 不支持**：只读挂载无法原地打补丁，请使用 deb 安装
 - 交叉构建：`node build-exe.mjs --target=linux`（下载官方 Linux Node + postject ELF 注入）
 
-**在 Ubuntu 上自验（开发者）**：仓库的测试套件即目标机验证工具——
+**在 Linux 上自验（开发者）**：仓库的测试套件即目标机验证工具——
 
 ```bash
 node test-patcher.mjs    # 30 项安全测试（asar 副本上打补丁/官方工具交叉验证/模拟更新不降级）

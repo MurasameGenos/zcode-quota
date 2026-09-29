@@ -240,7 +240,7 @@ function buildPatchContents(origBuf, parsed) {
 // ---------- 环境与状态 ----------
 
 // 跨平台定位 ZCode 桌面版的 app.asar（可用环境变量 ZQUOTA_ASAR 或 --asar 覆盖）。
-// Windows：Program Files 标准安装位；Linux（Ubuntu deb）：/opt/ZCode；
+// Windows：Program Files 标准安装位；Linux（deb 包）：/opt/ZCode；
 // macOS：.app bundle 内。AppImage 为只读挂载，无法原地打补丁（见 README）。
 function defaultAsarPath() {
   if (process.env.ZQUOTA_ASAR) return process.env.ZQUOTA_ASAR;
@@ -307,7 +307,7 @@ function canWrite(dir) {
 // - Windows：PowerShell Start-Process -Verb RunAs（UAC 弹窗）。用 -EncodedCommand 传脚本
 //   （Base64 UTF-16LE），彻底避开 cmd→powershell 的多层引号转义；ArgumentList 每项是
 //   "内容带双引号"的 PS 单引号字符串，保证含空格路径不被拆散。
-// - Linux（Ubuntu）：优先 pkexec（桌面 polkit 弹窗），退回 sudo（终端密码）。
+// - Linux：优先 pkexec（桌面 polkit 弹窗），退回 sudo（终端密码）。
 //   shell 引号用 POSIX 单引号转义。
 function relaunchElevated(args) {
   if (process.platform !== "win32") {

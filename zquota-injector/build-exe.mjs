@@ -59,7 +59,7 @@ async function main() {
     console.log("4/4 清理…");
     try { rmSync(join(ROOT, "zquota-injector.blob")); } catch {}
     console.log(`完成：${OUT}`);
-    console.log("注意：产物未做运行验证。请在 Ubuntu 上执行：chmod +x ZCodeQuotaInjector-linux-x64 && ./ZCodeQuotaInjector-linux-x64 version");
+    console.log("注意：产物未做运行验证。请在 Linux 上执行：chmod +x ZCodeQuotaInjector-linux-x64 && ./ZCodeQuotaInjector-linux-x64 version");
     return;
   }
 

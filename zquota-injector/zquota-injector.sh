@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# ZCodeQuota 注入器启动器（Linux / Ubuntu）
-# 依赖系统 Node.js ≥ 18（Ubuntu：sudo apt install -y nodejs，或使用 NodeSource 新版）
+# ZCodeQuota 注入器启动器（Linux）
+# 依赖系统 Node.js ≥ 18（Debian 系：sudo apt install -y nodejs；其他发行版用各自包管理器或 NodeSource）
 set -euo pipefail
 cd "$(dirname "$0")"
 

@@ -16,7 +16,7 @@ const EDGE_CANDIDATES = [
   // Windows
   "C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe",
   "C:/Program Files/Microsoft/Edge/Application/msedge.exe",
-  // Linux（Ubuntu 常见浏览器路径）
+  // Linux 常见浏览器路径
   "/usr/bin/microsoft-edge",
   "/usr/bin/google-chrome-stable",
   "/usr/bin/google-chrome",
