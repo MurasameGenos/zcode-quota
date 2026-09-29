@@ -24,7 +24,7 @@ const { join, dirname, basename } = require("node:path");
 const { execSync } = require("node:child_process");
 const readline = require("node:readline");
 
-const VERSION = "0.2.5";
+const VERSION = "0.2.6";
 const ROOT = __dirname;
 
 // ---------- 载荷加载（SEA 资产或源码目录） ----------
@@ -324,10 +324,16 @@ function install(asarPath) {
 
   // 已打过补丁：先从备份还原为原版，再重新注入（一步完成"更新"）
   {
-    const probe = parseAsar(readFileSync(asarPath));
-    if (readFileFromAsar(readFileSync(asarPath), probe, P_HTML).toString("utf8").includes("zquota-renderer.js")) {
+    const probeBuf = readFileSync(asarPath);
+    const probe = parseAsar(probeBuf);
+    if (readFileFromAsar(probeBuf, probe, P_HTML).toString("utf8").includes("zquota-renderer.js")) {
       const bak0 = backupPath(asarPath);
       if (!existsSync(bak0)) fatal("当前 asar 已带补丁但没有原版备份，无法更新。请先卸载失败残留或重装 ZCode。");
+      const bakBuf0 = readFileSync(bak0);
+      const bakVer0 = zcodeVersion(bakBuf0, parseAsar(bakBuf0));
+      const curVer0 = zcodeVersion(probeBuf, probe);
+      if (bakVer0 !== curVer0)
+        fatal(`当前补丁基于 ZCode ${curVer0}，但备份是 ${bakVer0}，还原会降级。请重装 ZCode ${curVer0} 后重新 install。`);
       copyFileSync(bak0, asarPath);
       console.log("✓ 检测到已有补丁，已先还原为原版（更新模式）");
     }
@@ -392,20 +398,35 @@ function uninstall(asarPath, purge) {
   const st = loadState();
   const target = (st && st.asarPath) || asarPath;
   const bak = backupPath(target);
+  if (zcodeRunning()) fatal("检测到 ZCode 正在运行，请先完全退出 ZCode 再卸载。");
+  const curBuf = readFileSync(target);
+  const curParsed = parseAsar(curBuf);
+  const curPatched = readFileFromAsar(curBuf, curParsed, P_HTML).toString("utf8").includes("zquota-renderer.js");
   if (existsSync(bak)) {
-    if (zcodeRunning()) fatal("检测到 ZCode 正在运行，请先完全退出 ZCode 再卸载。");
-    copyFileSync(bak, target);
-    console.log("✓ 已还原原版 app.asar（字节级还原）");
-    if (purge) {
+    const bakBuf = readFileSync(bak);
+    const bakVer = zcodeVersion(bakBuf, parseAsar(bakBuf));
+    const curVer = zcodeVersion(curBuf, curParsed);
+    if (!curPatched) {
+      // 当前已是原版（典型场景：ZCode 刚自动更新，补丁已被新版覆盖）。
+      // 备份属于旧版本，绝不能用它覆盖——清理过期备份即可，避免把新版降回旧版。
       unlinkSync(bak);
-      console.log("✓ 已删除原版备份");
+      console.log(`✓ 当前 app.asar 已是原版（${curVer}），无需还原；已清理过期备份（原 ${bakVer}）。`);
+    } else if (bakVer !== curVer) {
+      fatal(
+        `当前补丁基于 ZCode ${curVer}，但备份是 ${bakVer}，还原会导致降级。` +
+          `请重装 ZCode ${curVer} 修复，或先手动删除备份：${bak}`
+      );
+    } else {
+      copyFileSync(bak, target);
+      console.log(`✓ 已还原原版 app.asar（ZCode ${bakVer}，字节级还原）`);
+      if (purge) {
+        unlinkSync(bak);
+        console.log("✓ 已删除原版备份");
+      }
     }
   } else {
     console.log("未找到原版备份；尝试确认当前 asar 是否干净…");
-    const buf = readFileSync(target);
-    const parsed = parseAsar(buf);
-    if (readFileFromAsar(buf, parsed, P_HTML).toString("utf8").includes("zquota-renderer.js"))
-      fatal("当前 asar 带有补丁但没有备份，无法安全还原。请重装 ZCode 修复。");
+    if (curPatched) fatal("当前 asar 带有补丁但没有备份，无法安全还原。请重装 ZCode 修复。");
     console.log("✓ 当前 asar 为原版，无需还原。");
   }
   try {
@@ -439,9 +460,16 @@ function status(asarPath) {
   const patchedNow = readFileFromAsar(buf, parsed, P_HTML).toString("utf8").includes("zquota-renderer.js");
   console.log(`ZCode 版本        ：${zver}`);
   console.log(`补丁状态          ：${patchedNow ? `已安装（插件 v${(st && st.pluginVersion) || "?"}，${(st && st.installedAt) || "时间未知"}）` : "未安装"}`);
-  if (st && st.zcodeVersion !== zver && patchedNow)
-    console.log(`⚠ ZCode 可能已更新（安装时 ${st.zcodeVersion}，当前 ${zver}），建议 uninstall 后重新 install。`);
-  console.log(`原版备份          ：${existsSync(backupPath(target)) ? backupPath(target) : "无"}`);
+  if (!patchedNow && (st && st.asarPath))
+    console.log("ℹ 补丁不在当前 asar 上（如 ZCode 刚更新过属预期）：直接重新 install 即可，会自动刷新备份并打在最新版上。");
+  const bak = backupPath(target);
+  if (existsSync(bak)) {
+    const bakBuf = readFileSync(bak);
+    const bakVer = zcodeVersion(bakBuf, parseAsar(bakBuf));
+    console.log(`原版备份          ：${bak}${bakVer !== zver ? `（版本 ${bakVer}，与当前 ${zver} 不同；install 时会自动刷新，uninstall 不会用它降级当前版本）` : ""}`);
+  } else {
+    console.log("原版备份          ：无");
+  }
 }
 
 function doctor(asarPath) {
@@ -611,4 +639,4 @@ if (require.main === module) {
   })();
 }
 
-module.exports = { parseAsar, encodeHeader, buildPatched, buildPatchContents };
+module.exports = { parseAsar, encodeHeader, buildPatched, buildPatchContents, readFileFromAsar };

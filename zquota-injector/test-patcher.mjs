@@ -10,7 +10,7 @@ import { join } from "node:path";
 import { execSync, spawnSync } from "node:child_process";
 import { dirname, join as pjoin } from "node:path";
 import { fileURLToPath } from "node:url";
-import { parseAsar, encodeHeader, buildPatched } from "./injector.cjs";
+import { parseAsar, encodeHeader, buildPatched, readFileFromAsar } from "./injector.cjs";
 
 const ROOT = dirname(fileURLToPath(import.meta.url));
 const LIVE = "C:\\Program Files\\ZCode\\resources\\app.asar";
@@ -103,6 +103,41 @@ const check = (name, ok, extra = "") => {
     console.log(un.stdout.trim());
     check("uninstall 成功", un.status === 0);
     check("卸载后与原版逐字节一致", sha(copy) === originalSha);
+
+    // 6. 模拟 ZCode 自动更新：新版原版覆盖后 install/uninstall 均不得降级
+    //   构造仅 package.json 版本号不同的"新版原版"
+    const mkVer = (src, ver) => {
+      const b = readFileSync(src);
+      const p = parseAsar(b);
+      const pkg = readFileFromAsar(b, p, "package.json");
+      const pkg2 = Buffer.from(pkg.toString("utf8").replace(/"version": "3\.14\.\d+"/, `"version": "${ver}"`));
+      return buildPatched(b, p, [["package.json", pkg2]], []);
+    };
+    const verOf = (f) => {
+      const b = readFileSync(f);
+      return zcodeVersionOf(b);
+    };
+    const zcodeVersionOf = (b) => JSON.parse(readFileFromAsar(b, parseAsar(b), "package.json").toString("utf8")).version;
+
+    const v344 = mkVer(copy, "3.14.4");
+    writeFileSync(join(tmp, "orig-344.asar"), v344);
+    // setup：先在 3.14.3 上安装一次，产生旧版本备份（覆盖"刷新备份"分支的前置条件）
+    INJECTOR(["install", "--asar", copy]);
+    writeFileSync(copy, v344); // 模拟 3.14.4 覆盖安装（补丁消失、无标记，但旧备份还在）
+    const stAfterUpd = INJECTOR(["status", "--asar", copy]);
+    check("更新后 status 显示未安装", stAfterUpd.stdout.includes("未安装"));
+    const inst344 = INJECTOR(["install", "--asar", copy]);
+    check("更新后 install 成功且刷新备份", inst344.status === 0 && (inst344.stdout.includes("已更新") || inst344.stdout.includes("已备份原版")), (inst344.stdout.match(/✓.*/g) || ["无输出"]).join(" | "));
+    check("install 打在 3.14.4 上（不降级）", verOf(copy) === "3.14.4" && readFileFromAsar(readFileSync(copy), parseAsar(readFileSync(copy)), "out\\renderer\\index.html").toString("utf8").includes("zquota-renderer.js"));
+    check("备份已刷新为 3.14.4", (() => { const b = readFileSync(copy + ".zquota-backup"); return zcodeVersionOf(b) === "3.14.4"; })());
+
+    const v345 = mkVer(join(tmp, "orig-344.asar"), "3.14.5");
+    writeFileSync(copy, v345); // 模拟再次更新到 3.14.5（当前干净原版，备份还是 3.14.4）
+    const unAfterUpd = INJECTOR(["uninstall", "--purge", "--asar", copy]);
+    console.log(unAfterUpd.stdout.trim());
+    check("旧备份下 uninstall 不降级", unAfterUpd.status === 0 && verOf(copy) === "3.14.5");
+    check("卸载后与 3.14.5 原版逐字节一致", sha256hex(readFileSync(copy)) === sha256hex(v345));
+    check("过期备份已清理", !existsSync(copy + ".zquota-backup"));
 
     console.log(failed ? `\n${failed} 项失败` : "\n全部通过");
     process.exit(failed ? 1 : 0);
