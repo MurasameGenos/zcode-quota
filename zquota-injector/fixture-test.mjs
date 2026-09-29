@@ -13,15 +13,29 @@ import { fileURLToPath } from "node:url";
 const ROOT = dirname(fileURLToPath(import.meta.url));
 const PORT = 9591;
 const EDGE_CANDIDATES = [
+  // Windows
   "C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe",
   "C:/Program Files/Microsoft/Edge/Application/msedge.exe",
+  // Linux（Ubuntu 常见浏览器路径）
+  "/usr/bin/microsoft-edge",
+  "/usr/bin/google-chrome-stable",
+  "/usr/bin/google-chrome",
+  "/usr/bin/chromium-browser",
+  "/usr/bin/chromium",
 ];
 const edge = EDGE_CANDIDATES.find(existsSync);
 if (!edge) throw new Error("未找到 Edge");
 
 const dir = mkdtempSync(join(tmpdir(), "zq-fixture-"));
 // 从真实 asar 提取样式表与渲染层脚本
-execSync(`npx --yes @electron/asar extract-file "C:\\Program Files\\ZCode\\resources\\app.asar" "out\\renderer\\assets\\styles-C8Nayk5k.css"`, { cwd: dir, shell: true });
+// 跨平台定位真实 asar（优先原版备份），并注意样式表文件名可能随版本变化——探测实际文件
+const NATIVE_ASAR =
+  process.platform === "win32" ? "C:\\Program Files\\ZCode\\resources\\app.asar" : "/opt/ZCode/resources/app.asar";
+const ASAR = existsSync(NATIVE_ASAR + ".zquota-backup") ? NATIVE_ASAR + ".zquota-backup" : NATIVE_ASAR;
+const listOut = execSync(`npx --yes @electron/asar list "${ASAR}"`, { encoding: "utf8", shell: true, maxBuffer: 128 * 1024 * 1024 });
+const cssName = (listOut.match(/out\\renderer\\assets\\styles-[\w-]+\.css/) || [])[0];
+if (!cssName) throw new Error("asar 中未找到 styles-*.css");
+execSync(`npx --yes @electron/asar extract-file "${ASAR}" "${cssName}"`, { cwd: dir, shell: true });
 copyFileSync(join(ROOT, "payload", "zquota-renderer.js"), join(dir, "zquota-renderer.js"));
 
 const payload = {
@@ -43,7 +57,7 @@ const payload = {
 };
 
 const html = `<!doctype html><html><head><meta charset="utf-8">
-<link rel="stylesheet" href="./styles-C8Nayk5k.css">
+<link rel="stylesheet" href="./${cssName.split("\\").pop()}">
 <style>body{background:#1b1d22;color:#e8eaf2;font-family:system-ui;padding:40px;display:flex;flex-direction:column;gap:24px;min-height:100vh;box-sizing:border-box}</style>
 </head><body>
 <div id="composer" style="display:flex;align-items:center;gap:8px;border:1px solid #333;padding:10px;border-radius:12px;max-width:520px">

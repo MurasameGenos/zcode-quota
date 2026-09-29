@@ -10,3 +10,6 @@ sea-config-backup.json
 # 系统
 Thumbs.db
 .DS_Store
+# Linux 交叉构建缓存与产物
+.sea-linux/
+ZCodeQuotaInjector-linux-x64

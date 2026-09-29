@@ -24,7 +24,7 @@ const { join, dirname, basename } = require("node:path");
 const { execSync } = require("node:child_process");
 const readline = require("node:readline");
 
-const VERSION = "0.2.6";
+const VERSION = "0.3.0";
 const ROOT = __dirname;
 
 // ---------- 载荷加载（SEA 资产或源码目录） ----------
@@ -239,7 +239,22 @@ function buildPatchContents(origBuf, parsed) {
 
 // ---------- 环境与状态 ----------
 
-const DEFAULT_ASAR = "C:\\Program Files\\ZCode\\resources\\app.asar";
+// 跨平台定位 ZCode 桌面版的 app.asar（可用环境变量 ZQUOTA_ASAR 或 --asar 覆盖）。
+// Windows：Program Files 标准安装位；Linux（Ubuntu deb）：/opt/ZCode；
+// macOS：.app bundle 内。AppImage 为只读挂载，无法原地打补丁（见 README）。
+function defaultAsarPath() {
+  if (process.env.ZQUOTA_ASAR) return process.env.ZQUOTA_ASAR;
+  if (process.platform === "win32") return "C:\\Program Files\\ZCode\\resources\\app.asar";
+  if (process.platform === "darwin") return "/Applications/ZCode.app/Contents/Resources/app.asar";
+  const candidates = [
+    "/opt/ZCode/resources/app.asar",
+    "/opt/zcode/resources/app.asar",
+    "/usr/lib/zcode/resources/app.asar",
+    "/usr/share/zcode/resources/app.asar",
+  ];
+  return candidates.find((p) => existsSync(p)) || candidates[0];
+}
+const DEFAULT_ASAR = defaultAsarPath();
 const stateDir = () =>
   process.env.ZQUOTA_HOME
     ? process.env.ZQUOTA_HOME
@@ -288,11 +303,32 @@ function canWrite(dir) {
   }
 }
 
-// 经 PowerShell 提权重跑自身；-Wait 等待提权窗口执行完毕。
-// 用 -EncodedCommand 传脚本（Base64 UTF-16LE），彻底避开 cmd→powershell 的多层引号转义。
-// ArgumentList 每项是"内容带双引号"的 PS 单引号字符串：Start-Process 以空格拼接各参数，
-// 只有内嵌的双引号能随命令行传给子进程，保证含空格路径不被拆散。
+// 提权重跑自身，等待提权进程执行完毕。
+// - Windows：PowerShell Start-Process -Verb RunAs（UAC 弹窗）。用 -EncodedCommand 传脚本
+//   （Base64 UTF-16LE），彻底避开 cmd→powershell 的多层引号转义；ArgumentList 每项是
+//   "内容带双引号"的 PS 单引号字符串，保证含空格路径不被拆散。
+// - Linux（Ubuntu）：优先 pkexec（桌面 polkit 弹窗），退回 sudo（终端密码）。
+//   shell 引号用 POSIX 单引号转义。
 function relaunchElevated(args) {
+  if (process.platform !== "win32") {
+    console.log("需要 root 权限（/opt 通常归 root 所有），正在请求授权…");
+    const shq = (s) => `'${String(s).replace(/'/g, "'\\''")}'`;
+    const args2 = args.map(shq).join(" ");
+    const attempts = [
+      ["pkexec", `pkexec ${shq(process.execPath)} ${args2}`],
+      ["sudo", `sudo ${shq(process.execPath)} ${args2}`],
+    ];
+    for (const [name, cmd] of attempts) {
+      try {
+        execSync(cmd, { stdio: "inherit" });
+        return true;
+      } catch (e) {
+        console.log(`${name} 不可用或被取消，尝试下一种…`);
+      }
+    }
+    console.error("提权失败：请安装 policykit-1（pkexec）或以 sudo 手动运行本工具。");
+    return false;
+  }
   console.log("需要管理员权限，正在请求 UAC 授权…");
   console.log("（请在弹出的新窗口中观察进度；完成后回到本窗口）");
   const sq = (s) => `'${String(s).replace(/'/g, "''")}'`; // PS 单引号字符串

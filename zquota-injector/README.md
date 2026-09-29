@@ -66,3 +66,37 @@ node build-exe.mjs     # Node SEA + postject → ZCodeQuotaInjector.exe
 - 设置区块的挂载锚点依赖设置页 DOM 结构，版本大改时可能挂不上（小环不受影响）；`doctor` 日志含页面 `data-testid` 清单，便于适配。
 - 多窗口（如独立设置的窗口）各自会注入一份 UI。
 - 与任何 asar 改包方案一样：极小概率触发 SmartScreen/杀软启发式扫描（本工具只追加内容、不改可执行文件）。
+
+## Linux（Ubuntu）
+
+v0.3.0 起支持。两种使用方式：
+
+**方式 A：单文件可执行（实验性，未在真实 Ubuntu 上运行验证）**
+
+```bash
+chmod +x ZCodeQuotaInjector-linux-x64
+./ZCodeQuotaInjector-linux-x64            # 交互菜单
+./ZCodeQuotaInjector-linux-x64 install    # 命令行
+```
+
+**方式 B：脚本方式（推荐，需系统 Node ≥ 18）**
+
+```bash
+./zquota-injector.sh              # 交互菜单
+./zquota-injector.sh install      # 命令行
+```
+
+平台差异说明：
+
+- ZCode（deb 包）默认安装在 `/opt/ZCode`，asar 位于 `/opt/ZCode/resources/app.asar`；非标准路径用 `--asar <路径>` 或环境变量 `ZQUOTA_ASAR` 指定
+- 提权：`/opt` 归 root，安装/卸载时自动走 `pkexec`（桌面 polkit 弹窗）→ `sudo` 顺序尝试
+- 状态目录：`~/.zquota`；诊断日志同目录下 `renderer.log` / `injector.log`
+- **AppImage 版 ZCode 不支持**：只读挂载无法原地打补丁，请使用 deb 安装
+- 交叉构建：`node build-exe.mjs --target=linux`（下载官方 Linux Node + postject ELF 注入）
+
+**在 Ubuntu 上自验（开发者）**：仓库的测试套件即目标机验证工具——
+
+```bash
+node test-patcher.mjs    # 30 项安全测试（asar 副本上打补丁/官方工具交叉验证/模拟更新不降级）
+node fixture-test.mjs    # UI 无头测试（需已安装 chromium/google-chrome/microsoft-edge 之一）
+```
