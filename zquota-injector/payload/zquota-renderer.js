@@ -19,7 +19,7 @@
   }
 
   const TID = "chat-context-usage-trigger";
-  const state = { data: null, error: "", fetching: false, lastFetch: 0, kimiBtn: null, dsBtn: null, panel: null, panelScope: "all", hoverTimer: null, settingsCard: null, testidsDumped: false };
+  const state = { data: null, error: "", fetching: false, lastFetch: 0, kimiHBtn: null, kimiMBtn: null, dsBtn: null, panel: null, panelScope: "all", hoverTimer: null, settingsCard: null, testidsDumped: false };
 
   const log = (m) => {
     console.debug("[zquota]", m);
@@ -79,7 +79,7 @@
 
   // ---------- 小环（Kimi 用量环 + DeepSeek 余额环） ----------
 
-  function ringSvg(ratio, colorOverride) {
+  function ringSvg(ratio, colorOverride, letter) {
     const C = 2 * Math.PI * 10;
     // 圆头补偿：round cap 在弧两端各多画半个线宽（共 4），可用弧长减 4，
     // 使 100% 时圆头恰好到达端点、87% 等中间值能看出明确缺口
@@ -88,6 +88,12 @@
     const off = usable * (1 - used);
     const track = token("--color-foreground-subtle", "#9aa3b5");
     const color = colorOverride || remainColor(ratio);
+    // 环中心字母（如 Kimi 的 H/M），不拦截鼠标事件
+    const letterSvg = letter
+      ? `<text x="12" y="12.5" text-anchor="middle" dominant-baseline="central" pointer-events="none" ` +
+        `style="font-family:'Segoe UI',system-ui,'Microsoft YaHei',sans-serif;font-size:8.5px;font-weight:600;` +
+        `fill:${token("--color-foreground", "#e8eaf2")};opacity:.85">${letter}</text>`
+      : "";
     return (
       `<svg viewBox="0 0 24 24" fill="none" aria-hidden="true" style="width:1em;height:1em;display:block">` +
       `<circle cx="12" cy="12" r="10" fill="none" transform="rotate(-90 12 12)" ` +
@@ -97,49 +103,24 @@
           `style="stroke:${color};stroke-width:4;stroke-dasharray:${usable.toFixed(2)};stroke-dashoffset:${off.toFixed(2)};` +
           `transition:stroke-dashoffset .5s ease,stroke .3s"/>`
         : "") +
+      letterSvg +
       `</svg>`
     );
   }
 
-  // Kimi 上下双半环：上半 = 5 小时额度剩余，下半 = 月度额度剩余；
-  // 各半独立按剩余比例填充与分级配色（半圆弧长 πr，含同样的圆头补偿）
-  function kimiRingSvg(topRemain, bottomRemain) {
-    const HALF = Math.PI * 10;
-    const usable = HALF - 4; // 补偿两端 round cap
-    const track = token("--color-foreground-subtle", "#9aa3b5");
-    const clamp01 = (v) => (v == null ? 0 : Math.max(0, Math.min(1, v)));
-    const half = (d, remain) =>
-      remain == null || clamp01(remain) <= 0
-        ? ""
-        : `<path d="${d}" fill="none" stroke-linecap="round" style="stroke:${remainColor(remain)};stroke-width:4;` +
-          `stroke-dasharray:${usable.toFixed(2)};stroke-dashoffset:${(usable * (1 - clamp01(remain))).toFixed(2)};` +
-          `transition:stroke-dashoffset .5s ease,stroke .3s"/>`;
-    return (
-      `<svg viewBox="0 0 24 24" fill="none" aria-hidden="true" style="width:1em;height:1em;display:block">` +
-      // 轨道两半
-      `<path d="M 2 12 A 10 10 0 0 1 22 12" fill="none" style="stroke:${track};stroke-width:4;opacity:.22"/>` +
-      `<path d="M 22 12 A 10 10 0 0 1 2 12" fill="none" style="stroke:${track};stroke-width:4;opacity:.22"/>` +
-      // 上半：5 小时；下半：月度
-      half("M 2 12 A 10 10 0 0 1 22 12", topRemain) +
-      half("M 22 12 A 10 10 0 0 1 2 12", bottomRemain) +
-      `</svg>`
-    );
+  // Kimi 用两个独立整环：H 环 = 5 小时窗口剩余，M 环 = 月度剩余；环中心带字母
+  function kimiRowRemain(key) {
+    const rows = state.data?.kimi?.rows || [];
+    const r = rows.find((x) => x.key === key);
+    return r ? r.remain : null;
   }
 
-  function kimiHalves(data) {
-    const rows = data?.kimi?.rows || [];
-    const w = rows.find((r) => r.key === "5h");
-    const m = rows.find((r) => r.key === "month");
-    return { top: w ? w.remain : null, bottom: m ? m.remain : null };
-  }
-
-  function kimiRingTitle() {
+  function kimiRingTitle(which) {
     const d = state.data;
-    if (!d) return "Kimi 额度（加载中…）";
+    if (!d) return which === "5h" ? "Kimi 5 小时窗口（加载中…）" : "Kimi 月度额度（加载中…）";
     if (!d.kimi?.ok) return `Kimi：${d.kimi?.error || "不可用"}`;
-    const w = d.kimi.rows.find((r) => r.key === "5h");
-    const m = d.kimi.rows.find((r) => r.key === "month");
-    return `Kimi ${w ? "5h " + w.text : ""}${w && m ? " · " : ""}${m ? "月度 " + m.text : ""}`.trim();
+    const r = d.kimi.rows.find((x) => x.key === (which === "5h" ? "5h" : "month"));
+    return which === "5h" ? `Kimi 5 小时窗口 ${r ? r.text : ""}`.trim() : `Kimi 月度额度 ${r ? r.text : ""}`.trim();
   }
 
   // DeepSeek 环：以 ¥100 为满
@@ -160,10 +141,15 @@
   function updateRing() {
     // 不设置 title：原生 tooltip（悬停弹出的系统黑框）不需要，信息由悬停面板承载；
     // aria-label 保留给无障碍读屏
-    if (state.kimiBtn?.isConnected) {
-      const halves = kimiHalves(state.data);
-      state.kimiBtn.innerHTML = kimiRingSvg(halves.top, halves.bottom);
-      state.kimiBtn.setAttribute("aria-label", kimiRingTitle());
+    if (state.kimiHBtn?.isConnected) {
+      const remain = kimiRowRemain("5h");
+      state.kimiHBtn.innerHTML = ringSvg(remain, remainColor(remain), "H");
+      state.kimiHBtn.setAttribute("aria-label", kimiRingTitle("5h"));
+    }
+    if (state.kimiMBtn?.isConnected) {
+      const remain = kimiRowRemain("month");
+      state.kimiMBtn.innerHTML = ringSvg(remain, remainColor(remain), "M");
+      state.kimiMBtn.setAttribute("aria-label", kimiRingTitle("month"));
     }
     if (state.dsBtn?.isConnected) {
       const r = dsRatio(state.data);
@@ -210,7 +196,7 @@
       const svg = trig.querySelector("svg");
       const w = svg && svg.getBoundingClientRect().width;
       const px = w > 4 ? Math.round(w * 100) / 100 : 16;
-      for (const btn of [state.kimiBtn, state.dsBtn]) {
+      for (const btn of [state.kimiHBtn, state.kimiMBtn, state.dsBtn]) {
         if (btn) btn.style.fontSize = px + "px";
       }
       return px;
@@ -223,23 +209,26 @@
     const trig = document.querySelector(`[data-testid="${TID}"]`);
     if (!trig || !trig.parentElement) return false;
     const parent = trig.parentElement;
-    if (state.kimiBtn?.isConnected && state.dsBtn?.isConnected) {
+    if (state.kimiHBtn?.isConnected && state.kimiMBtn?.isConnected && state.dsBtn?.isConnected) {
       // GLM 触发器重建时把我们的环挪到它旁边，并重测官方尺寸（官方可能改版）
-      if (state.kimiBtn.previousElementSibling !== trig) {
-        parent.insertBefore(state.kimiBtn, trig.nextSibling);
-        parent.insertBefore(state.dsBtn, state.kimiBtn.nextSibling);
+      if (state.kimiHBtn.previousElementSibling !== trig) {
+        parent.insertBefore(state.kimiHBtn, trig.nextSibling);
+        parent.insertBefore(state.kimiMBtn, state.kimiHBtn.nextSibling);
+        parent.insertBefore(state.dsBtn, state.kimiMBtn.nextSibling);
         syncRingSize(trig);
       }
       return true;
     }
     try {
-      state.kimiBtn = buildRingBtn(trig, "kimi", "Kimi 额度");
+      state.kimiHBtn = buildRingBtn(trig, "kimi-h", "Kimi 5 小时窗口");
+      state.kimiMBtn = buildRingBtn(trig, "kimi-m", "Kimi 月度额度");
       state.dsBtn = buildRingBtn(trig, "ds", "DeepSeek 余额");
-      parent.insertBefore(state.kimiBtn, trig.nextSibling);
-      parent.insertBefore(state.dsBtn, state.kimiBtn.nextSibling);
+      parent.insertBefore(state.kimiHBtn, trig.nextSibling);
+      parent.insertBefore(state.kimiMBtn, state.kimiHBtn.nextSibling);
+      parent.insertBefore(state.dsBtn, state.kimiMBtn.nextSibling);
       const px = syncRingSize(trig);
       updateRing();
-      log(`小环已挂载（Kimi + DeepSeek，克隆自 GLM 触发器，尺寸 ${px}px）`);
+      log(`小环已挂载（Kimi H/M + DeepSeek，克隆自 GLM 触发器，尺寸 ${px}px）`);
       return true;
     } catch (e) {
       log("小环挂载失败：" + e.message);
@@ -424,7 +413,8 @@
     clearTimeout(state.hoverTimer);
     clearTimeout(state._hideAnim);
     // 环的归属决定面板内容域：Kimi 环只显示 Kimi，DS 环只显示 DeepSeek
-    const scope = anchor.getAttribute && anchor.getAttribute("data-zquota-ring") === "ds" ? "ds" : anchor.getAttribute && anchor.getAttribute("data-zquota-ring") === "kimi" ? "kimi" : "all";
+    const ringAttr = anchor.getAttribute && anchor.getAttribute("data-zquota-ring");
+    const scope = ringAttr === "ds" ? "ds" : ringAttr === "kimi-h" || ringAttr === "kimi-m" ? "kimi" : "all";
     state.panelScope = scope;
     panelBody(state._panelBody, scope);
     state.open = true;
@@ -456,7 +446,8 @@
     const staying =
       to &&
       ((p.contains && p.contains(to)) ||
-        (state.kimiBtn && state.kimiBtn.contains(to)) ||
+        (state.kimiHBtn && state.kimiHBtn.contains(to)) ||
+        (state.kimiMBtn && state.kimiMBtn.contains(to)) ||
         (state.dsBtn && state.dsBtn.contains(to)) ||
         (to.closest && to.closest('[data-zquota-ring],[data-zquota-panel]')));
     if (!staying) {
@@ -575,7 +566,7 @@
       document.addEventListener("pointerdown", (e) => {
         if (!state.open || !state.panel) return;
         const t = e.target;
-        if (state.panel.contains(t) || (state.kimiBtn && state.kimiBtn.contains(t)) || (state.dsBtn && state.dsBtn.contains(t))) return;
+        if (state.panel.contains(t) || (state.kimiHBtn && state.kimiHBtn.contains(t)) || (state.kimiMBtn && state.kimiMBtn.contains(t)) || (state.dsBtn && state.dsBtn.contains(t))) return;
         closePanel();
       });
       document.addEventListener("keydown", (e) => {

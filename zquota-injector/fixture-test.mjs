@@ -134,40 +134,41 @@ const check = (n, ok, extra = "") => { console.log(`${ok ? "✓" : "✗"} ${n}${
     const ev = async (expr) => (await send("Runtime.evaluate", { expression: expr, returnByValue: true })).result.value;
 
     check("渲染脚本已执行", await ev("!!window.__ZQUOTA_RENDERER__"));
-    check("Kimi 环注入到 GLM 触发器旁", await ev(`!!document.querySelector('[data-zquota-ring="kimi"]') && document.querySelector('[data-zquota-ring="kimi"]').previousElementSibling?.getAttribute('data-testid') === 'chat-context-usage-trigger'`));
-    check("DeepSeek 环紧跟 Kimi 环", await ev(`(()=>{const k=document.querySelector('[data-zquota-ring="kimi"]'),d=document.querySelector('[data-zquota-ring="ds"]');return !!(k&&d&&d.previousElementSibling===k);})()`));
-    const ringSvgOk = await ev(`!!document.querySelector('[data-zquota-ring="kimi"] path[style*="stroke-dasharray"]')`);
+    check("H 环注入到 GLM 触发器旁", await ev(`!!document.querySelector('[data-zquota-ring="kimi-h"]') && document.querySelector('[data-zquota-ring="kimi-h"]').previousElementSibling?.getAttribute('data-testid') === 'chat-context-usage-trigger'`));
+    check("环顺序 H→M→DS 紧邻", await ev(`(()=>{const h=document.querySelector('[data-zquota-ring="kimi-h"]'),m=document.querySelector('[data-zquota-ring="kimi-m"]'),d=document.querySelector('[data-zquota-ring="ds"]');return !!(h&&m&&d&&m.previousElementSibling===h&&d.previousElementSibling===m);})()`));
+    const ringSvgOk = await ev(`!!document.querySelector('[data-zquota-ring="kimi-h"] circle[style*="stroke-dasharray"]')`);
     check("小环 SVG 就位", ringSvgOk);
-    check("环颜色内联固定（不受状态类影响）", await ev(`(()=>{const c=document.querySelector('[data-zquota-ring="kimi"] path[style*="stroke-dasharray"]');return c && c.style.stroke.includes('var(') && !c.getAttribute('stroke');})()`));
-    check("Kimi 环 aria-label 含剩余数据且无原生 title", await ev(`(()=>{const k=document.querySelector('[data-zquota-ring="kimi"]');return (k.getAttribute('aria-label')||'').includes('剩 88.0%') && !k.hasAttribute('title');})()`));
-    check("环尺寸与官方环一致（运行时实测同步）", await ev(`(()=>{const t=document.querySelector('[data-testid="chat-context-usage-trigger"] svg');const k=document.querySelector('[data-zquota-ring="kimi"] svg');const d=document.querySelector('[data-zquota-ring="ds"] svg');if(!t||!k||!d)return false;const tw=t.getBoundingClientRect().width,kw=k.getBoundingClientRect().width,dw=d.getBoundingClientRect().width;return Math.abs(kw-tw)<0.6&&Math.abs(dw-tw)<0.6;})()`));
-    check("Kimi 环上下双半环（上半 5h=0.88，下半月度=0.873，含圆头补偿）", await ev(`(()=>{const k=document.querySelector('[data-zquota-ring="kimi"]');if(!k)return false;const ps=[...k.querySelectorAll('path[style*="stroke-dasharray"]')];if(ps.length<2)return false;const U=Math.PI*10-4;const top=1-parseFloat(ps[0].style.strokeDashoffset)/U;const bot=1-parseFloat(ps[1].style.strokeDashoffset)/U;return Math.abs(top-0.88)<0.005&&Math.abs(bot-0.873)<0.005;})()`));
+    check("环颜色内联固定（不受状态类影响）", await ev(`(()=>{const c=document.querySelector('[data-zquota-ring="kimi-h"] circle[style*="stroke-dasharray"]');return c && c.style.stroke.includes('var(') && !c.getAttribute('stroke');})()`));
+    check("H 环 aria-label 含 5h 剩余且无原生 title", await ev(`(()=>{const k=document.querySelector('[data-zquota-ring="kimi-h"]');return (k.getAttribute('aria-label')||'').includes('剩 88.0%') && !k.hasAttribute('title');})()`));
+    check("环尺寸与官方环一致（运行时实测同步）", await ev(`(()=>{const t=document.querySelector('[data-testid="chat-context-usage-trigger"] svg');const h=document.querySelector('[data-zquota-ring="kimi-h"] svg'),m=document.querySelector('[data-zquota-ring="kimi-m"] svg'),d=document.querySelector('[data-zquota-ring="ds"] svg');if(!t||!h||!m||!d)return false;const tw=t.getBoundingClientRect().width;return [h,m,d].every(x=>Math.abs(x.getBoundingClientRect().width-tw)<0.6);})()`));
+    check("H/M 独立整环（H=5h 剩 0.88 带 H 字母，M=月度剩 0.873 带 M 字母）", await ev(`(()=>{const U=2*Math.PI*10-4;const h=document.querySelector('[data-zquota-ring="kimi-h"]'),m=document.querySelector('[data-zquota-ring="kimi-m"]');if(!h||!m)return false;const hc=h.querySelector('circle[style*="stroke-dasharray"]'),mc=m.querySelector('circle[style*="stroke-dasharray"]');if(!hc||!mc)return false;const hr=1-parseFloat(hc.style.strokeDashoffset)/U,mr=1-parseFloat(mc.style.strokeDashoffset)/U;const ht=(h.querySelector('text')||{}).textContent,mt=(m.querySelector('text')||{}).textContent;return Math.abs(hr-0.88)<0.005&&Math.abs(mr-0.873)<0.005&&ht==='H'&&mt==='M';})()`));
+    check("M 环 aria-label 含月度剩余", await ev(`(document.querySelector('[data-zquota-ring="kimi-m"]')?.getAttribute('aria-label')||'').includes('剩 87.3%')`));
     check("DeepSeek 环以 ¥100 为满显示进度且用主题色 #4D6BFE", await ev(`(()=>{const d=document.querySelector('[data-zquota-ring="ds"]');if(!d)return false;const c=d.querySelector('circle[style*="stroke-dasharray"]');if(!c)return false;const U=2*Math.PI*10-4;const off=parseFloat(c.style.strokeDashoffset);const ratio=1-off/U;const col=getComputedStyle(c).stroke;return Math.abs(ratio-13.23/100)<0.005 && (d.getAttribute('aria-label')||'').includes('¥13.23') && !d.hasAttribute('title') && (col==='rgb(77, 107, 254)'||col==='#4d6bfe');})()`));
 
     // 环间移动不闪没：Kimi leave → 立即 DS enter → 300ms 后面板仍显示
-    await ev(`document.querySelector('[data-zquota-ring="kimi"]').dispatchEvent(new MouseEvent('mouseenter', {bubbles:false}))`);
+    await ev(`document.querySelector('[data-zquota-ring="kimi-h"]').dispatchEvent(new MouseEvent('mouseenter', {bubbles:false}))`);
     await sleep(150);
-    await ev(`document.querySelector('[data-zquota-ring="kimi"]').dispatchEvent(new MouseEvent('mouseleave', {bubbles:false}))`);
+    await ev(`document.querySelector('[data-zquota-ring="kimi-h"]').dispatchEvent(new MouseEvent('mouseleave', {bubbles:false}))`);
     await ev(`document.querySelector('[data-zquota-ring="ds"]').dispatchEvent(new MouseEvent('mouseenter', {bubbles:false}))`);
     await sleep(400);
     check("环间移动面板不消失（无闪没）", await ev(`document.querySelector('[data-zquota-panel]')?.style.display === 'block'`));
 
     // 移向官方环（relatedTarget=官方触发器）：立即隐藏，不与官方卡片重叠
-    await ev(`document.querySelector('[data-zquota-ring="kimi"]').dispatchEvent(new MouseEvent('mouseleave', {bubbles:false, relatedTarget: document.querySelector('[data-testid="chat-context-usage-trigger"]')}))`);
+    await ev(`document.querySelector('[data-zquota-ring="kimi-h"]').dispatchEvent(new MouseEvent('mouseleave', {bubbles:false, relatedTarget: document.querySelector('[data-testid="chat-context-usage-trigger"]')}))`);
     await sleep(50);
     check("移向官方环立即隐藏（无重叠窗口）", await ev(`document.querySelector('[data-zquota-panel]')?.style.display === 'none'`));
 
     // 移向我们自己的面板（relatedTarget=panel）：保留 250ms 回桥缓冲
-    await ev(`document.querySelector('[data-zquota-ring="kimi"]').dispatchEvent(new MouseEvent('mouseenter', {bubbles:false}))`);
+    await ev(`document.querySelector('[data-zquota-ring="kimi-h"]').dispatchEvent(new MouseEvent('mouseenter', {bubbles:false}))`);
     await sleep(100);
-    await ev(`document.querySelector('[data-zquota-ring="kimi"]').dispatchEvent(new MouseEvent('mouseleave', {bubbles:false, relatedTarget: document.querySelector('[data-zquota-panel]')}))`);
+    await ev(`document.querySelector('[data-zquota-ring="kimi-h"]').dispatchEvent(new MouseEvent('mouseleave', {bubbles:false, relatedTarget: document.querySelector('[data-zquota-panel]')}))`);
     await sleep(100);
     check("移向面板保留回桥缓冲（250ms 内仍显示）", await ev(`document.querySelector('[data-zquota-panel]')?.style.display === 'block'`));
     await sleep(500);
     check("缓冲期后自然隐藏", await ev(`document.querySelector('[data-zquota-panel]')?.style.display === 'none'`));
 
     // 悬停 Kimi 环 → 面板只含 Kimi 区块
-    await ev(`document.querySelector('[data-zquota-ring="kimi"]').dispatchEvent(new MouseEvent('mouseenter', {bubbles:false}))`);
+    await ev(`document.querySelector('[data-zquota-ring="kimi-h"]').dispatchEvent(new MouseEvent('mouseenter', {bubbles:false}))`);
     await sleep(400);
     check("悬停 Kimi 环后面板显示", await ev(`document.querySelector('[data-zquota-panel]')?.style.display === 'block'`));
     check("面板带进场动画（zqIn）", await ev(`(()=>{const p=document.querySelector('[data-zquota-panel]');return p && (p.style.animation||'').includes('zqIn') && !!document.getElementById('zquota-panel-style');})()`));
@@ -187,7 +188,7 @@ const check = (n, ok, extra = "") => { console.log(`${ok ? "✓" : "✗"} ${n}${
     check("面板无毛玻璃（实底+无模糊）", await ev(`(()=>{const p=document.querySelector('[data-zquota-panel]');const s=getComputedStyle(p);const opaque=s.backgroundColor;return s.backdropFilter==='none'&&s.webkitBackdropFilter!=='blur(8px)'&&!!opaque;})()`));
 
     // 面板关闭：粘滞打开 → 点击面板外 → 收起；Esc 同理
-    await ev(`document.querySelector('[data-zquota-ring="kimi"]').click()`);
+    await ev(`document.querySelector('[data-zquota-ring="kimi-h"]').click()`);
     await sleep(200);
     check("点击小环粘滞展开", await ev(`document.querySelector('[data-zquota-panel]')?.style.display === 'block' && document.querySelector('[data-zquota-panel]').getAttribute('data-sticky') === 'true'`));
     await ev(`document.body.dispatchEvent(new PointerEvent('pointerdown', {bubbles:true}))`);
